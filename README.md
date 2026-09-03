@@ -1,175 +1,258 @@
 # THRDLabApp DevSecOps Diploma
 
-Дипломный репозиторий для построения безопасного CI/CD-пайплайна вокруг реального Django-приложения **THRDLabApp**.
+Дипломный проект по треку **DevSecOps**.
 
-Исходный рабочий проект: [sergeMMikh/thrdlabapp](https://github.com/sergeMMikh/thrdlabapp).
+Цель работы — построить безопасный CI/CD-пайплайн для веб-приложения с автоматизированными проверками безопасности и механизмом остановки небезопасного релиза.
 
-Этот репозиторий создан отдельно, чтобы разработка и тестирование DevSecOps-пайплайна, контейнеризации, SAST/DAST и security gates не затрагивали рабочую версию приложения.
+Задание Нетологии: [sib-Diplom-Track-DevSecOps](https://github.com/netology-code/sib-Diplom-Track-DevSecOps)
 
-## Исходное состояние проекта
+Исходный репозиторий приложения: _будет добавлен позже_.
 
-На момент начала дипломной работы приложение уже содержит:
+---
 
-- Django web application;
-- PostgreSQL как основную БД;
-- SQLite in-memory для автоматизированных тестов;
-- `pytest` и Django tests;
-- `flake8`;
-- GitHub Actions для lint/test;
-- Gunicorn и WhiteNoise в зависимостях;
-- переменные окружения для Django, PostgreSQL и SMTP.
+## План работы
 
-Целевой дипломный pipeline будет развиваться по этапам:
+Работа выполняется последовательно по этапам дипломного задания.
 
-1. CI/CD и воспроизводимое развёртывание;
-2. SAST;
-3. DAST;
-4. secret/dependency/config/container security checks;
-5. Security Gateway с блокировкой небезопасного релиза и публикацией результатов.
+### Этап 0. Подготовка стенда и исходного проекта
 
-## Docker Compose deployment
+Задачи:
 
-Для учебного хоста добавлены:
+- подготовить отдельный дипломный репозиторий;
+- развернуть учебный VPS;
+- настроить SSH-доступ по ключу;
+- ограничить сетевой доступ с помощью UFW;
+- контейнеризировать приложение;
+- подготовить `Dockerfile` и `docker compose`;
+- вынести конфигурацию и секреты в переменные окружения;
+- развернуть приложение и PostgreSQL на учебном хосте;
+- проверить доступность приложения извне;
+- зафиксировать исходное состояние проекта и инфраструктуры.
 
-- `Dockerfile` — образ Django/Gunicorn на Python 3.10, приложение запускается от непривилегированного пользователя;
-- `compose.yaml` — сервисы `web` и `db`;
-- `.env.example` — шаблон конфигурации без реальных секретов;
-- `.dockerignore` — исключение локальных, Git и secret-файлов из build context.
+Результат этапа:
 
-### Архитектура стенда
+- приложение воспроизводимо разворачивается на учебном VPS;
+- PostgreSQL доступен только внутри Docker-сети;
+- наружу опубликованы только необходимые сервисы;
+- секреты не хранятся в репозитории.
+
+### Этап 1. CI/CD
+
+Критерии задания:
+
+1. настроенный пайплайн сборки и доставки программного обеспечения;
+2. использование удалённого сервера для развёртывания;
+3. документированный процесс.
+
+План реализации:
+
+- использовать GitHub Actions;
+- запускать lint и тесты приложения;
+- собирать Docker-образ;
+- публиковать образ в container registry;
+- автоматически разворачивать успешную сборку на учебном VPS;
+- добавить healthcheck после deployment;
+- сохранять результаты pipeline как evidence.
+
+Целевая последовательность:
 
 ```text
-Client / DAST scanner
+commit / pull request
         |
-        | :8000
         v
-+-------------------+
-| Django / Gunicorn |
-| container: web    |
-+---------+---------+
-          |
-          | PostgreSQL :5432
-          v
-+-------------------+
-| PostgreSQL 15     |
-| container: db     |
-+---------+---------+
-          |
-          v
-   postgres_data
-   Docker volume
+      lint
+        |
+        v
+      tests
+        |
+        v
+ Docker build
+        |
+        v
+ image registry
+        |
+        v
+     deploy
+        |
+        v
+   healthcheck
 ```
 
-PostgreSQL наружу не публикуется. Доступ к БД возможен только из внутренней Docker-сети `app_net`.
+### Этап 2. SAST
 
-### Подготовка учебного хоста
+Критерии задания:
 
-На сервере должны быть установлены Docker Engine, Docker Compose plugin и Git.
+1. покрытие исходного кода проверками;
+2. автоматический запуск проверок во время сборки;
+3. выгрузка результатов в CI или систему управления уязвимостями.
 
-```bash
-git clone https://github.com/sergeMMikh/thrdlabapp-devsecops-diploma.git
-cd thrdlabapp-devsecops-diploma
-cp .env.example .env
-```
+План реализации:
 
-Отредактировать `.env`:
+- выполнить статический анализ Python/Django-кода;
+- использовать несколько подходящих инструментов, например Semgrep и Bandit;
+- запускать SAST автоматически в GitHub Actions;
+- сохранять отчёты как artifacts;
+- при возможности публиковать результаты в SARIF / GitHub Code Scanning;
+- провести анализ найденных проблем и ложных срабатываний.
 
-```env
-DEBUG=False
-SECRET_KEY=<long-random-secret>
-ALLOWED_HOSTS=127.0.0.1,localhost,<SERVER_IP_OR_DOMAIN>
-CSRF_TRUSTED_ORIGINS=http://<SERVER_IP_OR_DOMAIN>:8000
+Цель — покрыть проверками весь применимый исходный код проекта.
 
-PGDATABASE=electrochemistry_lab
-PGUSER=postgres
-PGPASSWORD=<strong-database-password>
-PGPORT=5432
+### Этап 3. DAST
 
-APP_BIND_ADDRESS=0.0.0.0
-APP_PORT=8000
-```
+Критерии задания:
 
-`.env` входит в `.gitignore` и не должен попадать в Git.
+1. покрытие работающего сервиса динамическими проверками;
+2. успешный запуск доступных методов сканирования;
+3. выгрузка результатов в CI или систему управления уязвимостями.
 
-Для генерации Django secret key можно использовать, например:
+План реализации:
 
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(50))"
-```
+- выполнять DAST против развернутого приложения на учебном стенде;
+- использовать OWASP ZAP;
+- выполнить baseline scan;
+- при необходимости добавить authenticated/API scan;
+- сохранять HTML/JSON/XML отчёты как CI artifacts;
+- разобрать обнаруженные уязвимости и false positive результаты.
 
-### Запуск
-
-```bash
-docker compose config
-docker compose build
-docker compose up -d
-```
-
-При старте `web` автоматически:
-
-1. ждёт успешного healthcheck PostgreSQL через Compose dependency;
-2. выполняет `python manage.py migrate --noinput`;
-3. выполняет `python manage.py collectstatic --noinput`;
-4. запускает Gunicorn на `0.0.0.0:8000` внутри контейнера.
-
-Проверка состояния:
-
-```bash
-docker compose ps
-docker compose logs --tail=100 web
-docker compose logs --tail=100 db
-```
-
-Приложение должно быть доступно по адресу:
+Целевая схема:
 
 ```text
-http://<SERVER_IP_OR_DOMAIN>:8000
+GitHub Actions
+      |
+      v
+   deploy
+      |
+      v
+training VPS
+      |
+      v
+  OWASP ZAP
+      |
+      v
+DAST report
 ```
 
-### Остановка и повторный запуск
+### Этап 4. Security Checks
 
-Остановить контейнеры, сохранив данные PostgreSQL:
+Критерии задания:
 
-```bash
-docker compose down
+1. проверка репозитория на секреты;
+2. проверка конфигурации или контейнерных образов.
+
+План реализации:
+
+- secret scanning — Gitleaks;
+- dependency scanning — pip-audit и/или Trivy;
+- container image scanning — Trivy;
+- Dockerfile / configuration checks;
+- проверка GitHub Actions и deployment-конфигурации;
+- формирование SBOM при необходимости;
+- сохранение отчётов в artifacts.
+
+Контролируемые области:
+
+```text
+source code
+    |
+    +-- secrets
+    +-- dependencies
+    +-- configuration
+    +-- Dockerfile
+    +-- container image
+    +-- CI/CD configuration
 ```
 
-Повторно запустить:
+### Этап 5. Security Gateway
 
-```bash
-docker compose up -d
+Критерии задания:
+
+1. остановка релиза при наличии недопустимых уязвимостей;
+2. дополнительные автоматизированные действия: комментарии в PR/MR и рекомендации по исправлению.
+
+План реализации:
+
+- определить правила допуска релиза;
+- блокировать deployment при критических результатах security scans;
+- определить допустимые уровни `Critical`, `High`, `Medium`, `Low`;
+- агрегировать результаты SAST, DAST, secret scanning и container scanning;
+- выводить понятный Security Summary в GitHub Actions;
+- публиковать информацию о проблемах в pull request;
+- документировать исключения и false positives.
+
+Пример целевого pipeline:
+
+```text
+                +--> SAST -----------+
+                |                    |
+commit --> tests+--> Secret Scan ----+--> Security Gateway --> Build/Deploy
+                |                    |
+                +--> SCA/Image Scan -+
+                                     |
+                                     +--> block release
+                                     +--> report
+                                     +--> PR feedback
 ```
 
-Полностью удалить стенд вместе с volume базы данных:
+### Этап 6. Анализ результатов и итоговая документация
 
-```bash
-docker compose down -v
-```
+После реализации pipeline необходимо:
 
-Последнюю команду следует использовать только тогда, когда данные учебной БД действительно можно удалить.
+- собрать результаты всех проверок;
+- классифицировать обнаруженные проблемы;
+- отделить подтверждённые уязвимости от false positives;
+- оценить риски и приоритет исправления;
+- описать remediation;
+- зафиксировать архитектуру итогового DevSecOps pipeline;
+- собрать evidence работы каждого этапа;
+- подготовить итоговое описание дипломного проекта.
 
-### Обновление приложения на учебном хосте
+---
 
-До реализации автоматического CD обновление выполняется вручную:
+## Планируемые инструменты
 
-```bash
-git pull
-docker compose up -d --build
-```
+| Задача | Инструмент |
+|---|---|
+| CI/CD | GitHub Actions |
+| Containerization | Docker / Docker Compose |
+| Web application | Django / Gunicorn |
+| Database | PostgreSQL |
+| SAST | Semgrep, Bandit |
+| Dependency scanning | pip-audit, Trivy |
+| Secret scanning | Gitleaks |
+| Container scanning | Trivy |
+| DAST | OWASP ZAP |
+| Security reports | GitHub Actions artifacts / SARIF |
+| Security Gateway | GitHub Actions jobs and release conditions |
 
-На следующем этапе эти действия будут перенесены в CI/CD pipeline.
+Состав инструментов может уточняться по мере выполнения работы. Для каждого выбранного средства в итоговой документации будет указана причина выбора и область покрытия.
 
-## Security decisions in the deployment baseline
+---
 
-Уже на базовом этапе приняты несколько решений, полезных для последующего DevSecOps-контроля:
+## Принципы выполнения работы
 
-- PostgreSQL не публикует порт на host network;
-- реальные пароли и `SECRET_KEY` не записаны в Compose/Dockerfile;
-- `.env` исключён из Git и Docker build context;
-- application container запускается не от `root`;
-- для PostgreSQL и Django/Gunicorn настроены healthchecks;
-- PostgreSQL хранит данные в именованном volume;
-- для контейнеров установлена restart policy `unless-stopped`;
-- версия PostgreSQL зафиксирована как `15-alpine`.
+При разработке pipeline придерживаемся следующих правил:
 
-Это исходный deployment baseline. Далее он будет расширен scanner'ами, отчётами, staging DAST и Security Gateway.
+- каждый этап сначала реализуется и проверяется отдельно;
+- security checks являются частью CI/CD, а не отдельной ручной процедурой;
+- реальные секреты не коммитятся в Git;
+- результаты проверок сохраняются и доступны для анализа;
+- найденные уязвимости не только фиксируются, но и анализируются;
+- false positives документируются;
+- критические проблемы должны иметь возможность остановить релиз;
+- все ключевые решения и результаты отражаются в документации.
+
+---
+
+## Статус выполнения
+
+| Этап | Статус |
+|---|---|
+| 0. Подготовка стенда | В работе |
+| 1. CI/CD | Не начат |
+| 2. SAST | Не начат |
+| 3. DAST | Не начат |
+| 4. Security Checks | Не начат |
+| 5. Security Gateway | Не начат |
+| 6. Итоговая документация | Не начат |
+
+README будет обновляться по мере прохождения этапов дипломной работы.
