@@ -1,0 +1,43 @@
+{% extends 'main/layout_furnaces.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>Today's bookings</h1>
+        <p><b>Date:</b> {{ date_today }}</p>
+
+        {% if bookings %}
+            <table class="today-bookings-table">
+                <tbody>
+                <tr>
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Location</th>
+                    <th>Person</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                </tr>
+                {% for booking in bookings %}
+                    <tr>
+                        <td>&nbsp;&nbsp;{{ booking.kind }}&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;{{ booking.item_name }}&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;{{ booking.item_location }}&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<a href="{% url 'person_detail' booking.person_id %}">{{ booking.person_name }}</a>&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;{{ booking.person_email|default:'-' }}&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;{{ booking.person_phone|default:'-' }}&nbsp;&nbsp;</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No bookings for today.</p>
+        {% endif %}
+
+        <div class="people-actions">
+            <a class="people-action-btn" href="{% url 'people' %}">
+                Back to people
+            </a>
+        </div>
+    </div>
+{% endblock %}

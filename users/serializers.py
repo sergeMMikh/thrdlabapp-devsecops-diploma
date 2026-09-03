@@ -1,0 +1,146 @@
+from rest_framework.serializers import ModelSerializer, IntegerField
+from rest_framework.relations import StringRelatedField
+
+from users.models import User
+#     Contact, Product, Shop, Category, \
+#     ProductInfo, ProductParameter, Order, OrderItem
+
+
+# class ContactSerializer(ModelSerializer):
+#     class Meta:
+#         model = Contact
+#         fields = ('id', 'user_id', 'city', 'street', 'house',
+#                   'structure', 'building', 'apartment',
+#                   'user', 'phone')
+#         read_only_fields = ('id',)
+#         extra_kwargs = {
+#             'user': {'write_only': True},
+#         }
+
+
+class UserSerializer(ModelSerializer):
+    # contacts = ContactSerializer(read_only=True, many=True)
+
+    class Meta:
+        model = User
+        fields = ('id', 'first_name', 'last_name', 'email',
+                  'email_is_verified')
+        read_only_fields = ('id',)
+        extra_kwargs = {
+            'first_name': {
+                'error_messages': {
+                    'max_length': (
+                        'First name is too long. Maximum length is 150 '
+                        'characters.'
+                    ),
+                    'blank': 'First name cannot be empty.',
+                },
+            },
+            'last_name': {
+                'error_messages': {
+                    'max_length': (
+                        'Last name is too long. Maximum length is 150 '
+                        'characters.'
+                    ),
+                },
+            },
+            'email': {
+                'error_messages': {
+                    'max_length': (
+                        'Email is too long. Maximum length is 254 '
+                        'characters.'
+                    ),
+                    'invalid': 'Enter a valid email address.',
+                    'blank': 'Email cannot be empty.',
+                    'unique': 'A user with this email already exists.',
+                },
+            },
+        }
+
+
+# class ProductSerializer(ModelSerializer):
+#     category = StringRelatedField()
+#
+#     class Meta:
+#         model = Product
+#         fields = ('id', 'name', 'category')
+#         extra_kwargs = {'name': {'required': False}}
+
+
+# class ProductParameterSerializer(ModelSerializer):
+#     parameter = StringRelatedField()
+#
+#     class Meta:
+#         model = ProductParameter
+#         fields = ('parameter', 'value')
+
+
+# class ShopSerializer(ModelSerializer):
+#     class Meta:
+#         model = Shop
+#         fields = ('id', 'name', 'state')
+#         read_only_fields = ('id',)
+
+#
+# class CategorySerializer(ModelSerializer):
+#     class Meta:
+#         model = Category
+#         fields = ('id', 'name')
+#         read_only_fields = ('id')
+
+
+# class ProductViewSerializer(ModelSerializer):
+#     category = StringRelatedField()
+#
+#     class Meta:
+#         model = Product
+#         fields = ('id', 'name', 'category')
+#         extra_kwargs = {'name': {'required': False}}
+#
+#
+# class SingleProductViewSerializer(ModelSerializer):
+#     product = ProductSerializer(read_only=True)
+#     product_parameters = ProductParameterSerializer(read_only=True,
+#                                                     many=True)
+#
+#     class Meta:
+#         model = ProductInfo
+#         fields = ('id', 'name', 'product', 'shop', 'quantity',
+#                   'price', 'price_rrc', 'product_parameters')
+#         read_only_fields = ('id',)
+
+
+# class OrderItemSerializer(ModelSerializer):
+#     # product_info = SingleProductViewSerializer(read_only=True)
+#
+#     class Meta:
+#         model = OrderItem
+#         fields = ('order_id', 'product_info', 'shop', 'quantity', 'order')
+#         # read_only_fields = ('id',)
+#         extra_kwargs = {
+#             'order': {'write_only': True},
+#         }
+
+
+# class OrderAddItemSerializer(ModelSerializer):
+#     class Meta:
+#         model = OrderItem
+#         fields = ('order', 'product_info', 'shop', 'quantity')
+#
+#
+# class OrderItemCreateSerializer(OrderItemSerializer):
+#     product_info = SingleProductViewSerializer(read_only=True)
+#
+#
+# class OrderSerializer(ModelSerializer):
+#     ordered_items = OrderItemCreateSerializer(read_only=True,
+#                                               many=True)
+#
+#     total_sum = IntegerField()
+#     # contact = ContactSerializer(read_only=True)
+#
+#     class Meta:
+#         model = Order
+#         fields = ('id', 'ordered_items', 'state', 'dt',
+#                   'total_sum')
+#         read_only_fields = ('id',)

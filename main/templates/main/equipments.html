@@ -1,0 +1,29 @@
+{% extends 'main/layout_furnaces.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>Equipment List:</h1>
+<table>
+
+    <tbody>
+    <tr>
+        <th>Laboratory Name</th>
+        <th>Room Number</th>
+        <th>Equipment</th>
+    </tr>
+    {% for equipment in equipments %}
+    <tr>
+        <td>&nbsp;&nbsp;{{ equipment.laboratory_name }}&nbsp;&nbsp;</td>
+        <td>&nbsp;&nbsp;{{ equipment.location }}&nbsp;&nbsp;</td>
+        <td>&nbsp;&nbsp;
+            <a href="{% url 'equipment'%}?equipment={{ equipment.name|urlencode }}">{{equipment.name}}</a>
+            &nbsp;&nbsp;
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+    </div>
+{% endblock %}

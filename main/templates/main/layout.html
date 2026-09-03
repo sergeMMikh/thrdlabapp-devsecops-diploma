@@ -1,0 +1,29 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'main/img/favicon-32x32.png' %}">
+    <meta charset="UTF-8">
+    <title>{% block title %}{% endblock %}</title>
+    {% include 'main/styles.html' %}
+    <link rel="stylesheet" href="{% static 'main/css/main.css' %}">
+</head>
+<body>
+    <aside{% if side_bar_image %} style="background-image: url('{% static side_bar_image %}');"{% endif %}>
+        <img src="{% static 'main/img/4whatsapp.png' %}" alt="SMM">
+        <span class="smm">Laboratory of Electrochemistry</span>
+        {% include 'main/navigation.html' %}
+    </aside>
+    <main>
+        <div class="home-return-wrap" style="left: 57%; right: auto; transform: translateX(-50%); text-align: left;">
+            {% block home_button %}
+            <a class="home-return-btn" href="{% url 'home' %}">
+                <i class="fas fa-home"></i> Home
+            </a>
+            {% endblock %}
+        </div>
+        {% block content %}
+        {% endblock %}
+    </main>
+</body>
+</html>

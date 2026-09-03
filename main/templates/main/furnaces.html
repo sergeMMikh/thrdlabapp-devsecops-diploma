@@ -1,0 +1,33 @@
+{% extends 'main/layout_furnaces.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>Furnace List:</h1>
+
+        <div class="furnace-groups">
+            {% for group in furnace_groups %}
+                <section class="furnace-group">
+                    <h2 class="furnace-group-title">{{ group.laboratory_name }}</h2>
+                    <p class="furnace-group-number">Laboratory {{ group.location }}</p>
+                    <table class="furnace-table">
+                        <tbody>
+                            <tr>
+                                <th>Furnace</th>
+                            </tr>
+                            {% for furnace in group.furnaces %}
+                                <tr>
+                                    <td>&nbsp;&nbsp;
+                                        <a href="{% url 'furnace'%}?furnace={{ furnace.name|urlencode }}">{{ furnace.name }}</a>
+                                        &nbsp;&nbsp;
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </section>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

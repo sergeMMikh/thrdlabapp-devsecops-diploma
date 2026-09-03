@@ -1,0 +1,54 @@
+{% extends 'main/layout_furnaces.html' %}
+{% block title %}Furnace booking{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>Furnace booking</h1>
+        <p>One person can book a furnace for a maximum of 3 days!</p>
+
+        {% if form.non_field_errors %}
+            <div>
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <form method="post" id="booking-form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" name="action" value="book">Book</button>
+            <button type="submit" name="action" value="book_and_next">Book and Book next</button>
+            <p id="availability-warning" style="color: red; margin-top: 1rem;"></p>
+        </form>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const furnaceSel = document.querySelector('select[name="furnace"]');
+        const dateInput = document.querySelector('input[name="date"]');
+        const warning = document.getElementById('availability-warning');
+
+        function check() {
+            warning.textContent = '';
+            if (!furnaceSel.value || !dateInput.value) {
+                return;
+            }
+            const params = new URLSearchParams({
+                furnace: furnaceSel.value,
+                date: dateInput.value,
+            });
+            fetch(`{% url 'check_furnace_availability' %}?${params}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.available) {
+                        warning.textContent = 'This furnace is already booked for that date.';
+                    }
+                });
+        }
+
+        furnaceSel.addEventListener('change', check);
+        dateInput.addEventListener('change', check);
+        // run once on load in case fields are pre-populated
+        check();
+    });
+    </script>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends 'main/layout_furnaces.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>This is a new version of application for our
+    solid state electrochemistry laboratory.</h1>
+        <p>Here I take into account last half of year experience and will extend
+    application functional by addition of new equipment.</p>
+        <a href="{% url 'home' %}">
+            <button class="btn btn-primary" href="{% url 'home' %}">Home</button>
+        </a>
+    </div>
+{% endblock %}

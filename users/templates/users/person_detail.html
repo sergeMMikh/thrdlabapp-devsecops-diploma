@@ -1,0 +1,198 @@
+{% extends 'main/layout_furnaces.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <style>
+            .person-bookings-table {
+                margin-left: auto;
+                margin-right: auto;
+            }
+        </style>
+
+        <h1>{{ person.first_name }} {{ person.surname }}</h1>
+
+        <table>
+            <tbody>
+            <tr>
+                <th>Email</th>
+                <td>&nbsp;&nbsp;{{ person.email }}&nbsp;&nbsp;</td>
+            </tr>
+            <tr>
+                <th>Phone</th>
+                <td>&nbsp;&nbsp;{{ person.telephone_number }}&nbsp;&nbsp;</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <br>
+        <b>Today: {{ date_today }}</b>
+        <br><br>
+
+        {% if today_bookings %}
+            <h3>Today's bookings</h3>
+            <table class="person-bookings-table js-sync-bookings-table">
+                <colgroup>
+                    <col style="background-color: #ddd;">
+                    <col style="background-color: #ccc;">
+                    <col style="background-color: #ddd;">
+                    <col style="background-color: #ccc;">
+                    <col style="background-color: #ddd;">
+                </colgroup>
+                <tbody>
+                <tr>
+                    <th>Booking Date</th>
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Comments</th>
+                    <th>Action</th>
+                </tr>
+                {% for booking in today_bookings %}
+                    <tr>
+                        <td>&nbsp;&nbsp;<b>{{ booking.date }}</b>&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<b>{{ booking.kind }}</b>&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<b>{{ booking.name }}</b>&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<b><i>{{ booking.comments }}</i></b>&nbsp;&nbsp;</td>
+                        <td>
+                            {% if booking.kind_key == 'furnace' %}
+                                <form method="post" action="{% url 'delete_furnace_booking' %}" onsubmit="return confirm('Are you sure you want to delete this booking?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                    <input type="hidden" name="furnace_name" value="{{ booking.name }}">
+                                    <input type="hidden" name="next" value="{% url 'person_detail' person.id %}">
+                                    <button type="submit">Delete</button>
+                                </form>
+                            {% else %}
+                                <form method="post" action="{% url 'delete_equipment_booking' %}" onsubmit="return confirm('Are you sure you want to delete this booking?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                    <input type="hidden" name="equipment_name" value="{{ booking.name }}">
+                                    <input type="hidden" name="next" value="{% url 'person_detail' person.id %}">
+                                    <button type="submit">Delete</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <br>
+        {% endif %}
+
+        {% if bookings %}
+            <h3>All upcoming bookings</h3>
+            <table class="person-bookings-table js-sync-bookings-table">
+                <colgroup>
+                    <col style="background-color: #ddd;">
+                    <col style="background-color: #ccc;">
+                    <col style="background-color: #ddd;">
+                    <col style="background-color: #ccc;">
+                    <col style="background-color: #ddd;">
+                </colgroup>
+                <tbody>
+                <tr>
+                    <th>Booking Date</th>
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Comments</th>
+                    <th>Action</th>
+                </tr>
+                {% for booking in bookings %}
+                    <tr>
+                        {% if booking.date == date_today %}
+                        <td>&nbsp;&nbsp;<b>{{ booking.date }}</b>&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<b>{{ booking.kind }}</b>&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<b>{{ booking.name }}</b>&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<b><i>{{ booking.comments }}</i></b>&nbsp;&nbsp;</td>
+                        {% else %}
+                        <td>&nbsp;&nbsp;{{ booking.date }}&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;{{ booking.kind }}&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;{{ booking.name }}&nbsp;&nbsp;</td>
+                        <td>&nbsp;&nbsp;<i>{{ booking.comments }}</i>&nbsp;&nbsp;</td>
+                        {% endif %}
+                        <td>
+                            {% if booking.kind_key == 'furnace' %}
+                                <form method="post" action="{% url 'delete_furnace_booking' %}" onsubmit="return confirm('Are you sure you want to delete this booking?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                    <input type="hidden" name="furnace_name" value="{{ booking.name }}">
+                                    <input type="hidden" name="next" value="{% url 'person_detail' person.id %}">
+                                    <button type="submit">Delete</button>
+                                </form>
+                            {% else %}
+                                <form method="post" action="{% url 'delete_equipment_booking' %}" onsubmit="return confirm('Are you sure you want to delete this booking?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                    <input type="hidden" name="equipment_name" value="{{ booking.name }}">
+                                    <input type="hidden" name="next" value="{% url 'person_detail' person.id %}">
+                                    <button type="submit">Delete</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No active bookings for today and future dates.</p>
+        {% endif %}
+    </div>
+    <script>
+        (function () {
+            function syncBookingTableColumns() {
+                const tables = Array.from(document.querySelectorAll('.js-sync-bookings-table'));
+                if (tables.length < 2) {
+                    return;
+                }
+
+                const colCount = tables[0].rows[0] ? tables[0].rows[0].cells.length : 0;
+                if (!colCount) {
+                    return;
+                }
+
+                const maxWidths = new Array(colCount).fill(0);
+
+                tables.forEach((table) => {
+                    const colgroup = table.querySelector('colgroup');
+                    if (colgroup) {
+                        Array.from(colgroup.children).forEach((col) => {
+                            col.style.width = '';
+                        });
+                    }
+                    table.style.width = '';
+                });
+
+                tables.forEach((table) => {
+                    Array.from(table.rows).forEach((row) => {
+                        Array.from(row.cells).forEach((cell, index) => {
+                            maxWidths[index] = Math.max(
+                                maxWidths[index],
+                                Math.ceil(cell.getBoundingClientRect().width),
+                            );
+                        });
+                    });
+                });
+
+                const totalWidth = maxWidths.reduce((sum, width) => sum + width, 0);
+
+                tables.forEach((table) => {
+                    const cols = table.querySelectorAll('colgroup col');
+                    cols.forEach((col, index) => {
+                        if (maxWidths[index]) {
+                            col.style.width = maxWidths[index] + 'px';
+                        }
+                    });
+                    table.style.width = totalWidth + 'px';
+                });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', syncBookingTableColumns);
+            } else {
+                syncBookingTableColumns();
+            }
+            window.addEventListener('resize', syncBookingTableColumns);
+        })();
+    </script>
+{% endblock %}

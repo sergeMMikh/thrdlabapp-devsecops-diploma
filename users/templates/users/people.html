@@ -1,0 +1,41 @@
+{% extends 'main/layout_furnaces.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>People</h1>
+
+        {% if people_rows %}
+            <table class="people-table">
+                <tbody>
+                <tr>
+                    <th colspan="2">Name</th>
+                </tr>
+                {% for row in people_rows %}
+                <tr>
+                    <td>&nbsp;&nbsp;
+                        <a href="{% url 'person_detail' row.0.id %}">{{ row.0.first_name }} {{ row.0.surname }}</a>
+                        &nbsp;&nbsp;
+                    </td>
+                    <td>&nbsp;&nbsp;
+                        {% if row|length > 1 %}
+                            <a href="{% url 'person_detail' row.1.id %}">{{ row.1.first_name }} {{ row.1.surname }}</a>
+                        {% endif %}
+                        &nbsp;&nbsp;
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No people yet.</p>
+        {% endif %}
+
+        <div class="people-actions">
+            <a class="people-action-btn" href="{% url 'today_equipment_bookings' %}">
+                View today's equipment bookings
+            </a>
+        </div>
+    </div>
+{% endblock %}

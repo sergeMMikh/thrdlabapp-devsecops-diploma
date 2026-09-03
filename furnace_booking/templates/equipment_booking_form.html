@@ -1,0 +1,54 @@
+{% extends 'main/layout_furnaces.html' %}
+{% block title %}Equipment booking{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>Equipment booking</h1>
+
+        {% if form.non_field_errors %}
+            <div>
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <form method="post" id="booking-form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" name="action" value="book">Book</button>
+            <button type="submit" name="action" value="book_and_next">Book and Book next</button>
+            <p id="availability-warning" style="color: red; margin-top: 1rem;"></p>
+        </form>
+    </div>
+
+    <script>
+    // handle availability checks without submitting the form
+    document.addEventListener('DOMContentLoaded', function () {
+        const equipmentSel = document.querySelector('select[name="equipment"]');
+        const dateInput = document.querySelector('input[name="date"]');
+        const warning = document.getElementById('availability-warning');
+
+        function check() {
+            warning.textContent = '';
+            if (!equipmentSel.value || !dateInput.value) {
+                return;
+            }
+            const params = new URLSearchParams({
+                equipment: equipmentSel.value,
+                date: dateInput.value,
+            });
+            fetch(`{% url 'check_equipment_availability' %}?${params}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.available) {
+                        warning.textContent = 'This equipment is already booked for that date.';
+                    }
+                });
+        }
+
+        equipmentSel.addEventListener('change', check);
+        dateInput.addEventListener('change', check);
+        // run once on load in case fields are pre-populated
+        check();
+    });
+    </script>
+{% endblock %}

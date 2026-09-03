@@ -1,0 +1,28 @@
+{% extends 'main/layout.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block home_button %}{% endblock %}
+
+{% block content %}
+    <div class="features">
+        <h1>{{ title }}</h1>
+        <p class="home-intro">
+            Welcome to the laboratory equipment booking application.<br>
+            Here you can browse the available equipments and book them.
+        </p>
+        <div class="d-grid gap-2 col-6 mx-auto mt-4">
+            <a class="btn home-quick-link" href="{% url 'furnaces' %}">
+                <i class="fa-solid fa-box-archive fa-rotate-180"></i> Furnaces
+            </a>
+            <a class="btn home-quick-link" href="{% url 'equipments' %}">
+                <i class="fa-solid fa-chart-line"></i> Equipment
+            </a>
+            <a class="btn home-quick-link" href="{% url 'furnace_booking' %}">
+                <i class="fa-solid fa-calendar-check"></i> Furnace booking
+            </a>
+            <a class="btn home-quick-link" href="{% url 'equipment_booking' %}">
+                <i class="fa-solid fa-calendar-check"></i> Equipment booking
+            </a>
+        </div>
+    </div>
+{% endblock %}

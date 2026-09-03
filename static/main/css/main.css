@@ -1,0 +1,223 @@
+/* Base background */
+body {
+    background: #fefefe;
+    margin: 0;
+}
+
+.home-return-wrap {
+    position: fixed;
+    top: 20px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    z-index: 1000;
+}
+
+.home-return-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin: 0;
+    padding: 5px 7px;
+    border-radius: 0 0 13px 0;
+    color: #ffffff;
+    font-size: 0.89rem;
+    font-weight: 900;
+    text-decoration: none;
+    background: linear-gradient(120deg, #1f2366 0%, #7b2f30 55%, #2f183d 100%);
+    box-shadow: 0 8px 16px rgba(20, 22, 48, 0.28);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.home-return-btn:hover,
+.home-return-btn:focus {
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(20, 22, 48, 0.35);
+}
+
+table {
+    border-collapse: separate;
+    border-spacing: 10px 0;
+}
+
+table th,
+table td {
+    padding: 4.8px 10px;
+}
+
+table tbody tr + tr td,
+table tbody tr + tr th {
+    border-top: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+/* Side bar */
+aside {
+    float: left;
+    background: #F56231;
+    width: 20%;
+    padding: 2.5%;
+    height: 100vh; /* 100% */
+    color: #fff;
+    background-image: url(../img/side_bar_img.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-right: 5px solid #faa20d;
+}
+
+/* logo */
+aside img{
+    float: left;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* Logo text */
+aside .smm{
+    font-size: 130%;
+    margin-left: 10px;
+    font-weight: bold;
+    position: relative;
+    top: 10px;
+}
+
+/* h3 headers "Navigation*/
+aside h3 {
+    margin-top: 50px;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+/* List of urls */
+aside ul {
+    list-style: none
+}
+
+/* list elements */
+aside ul li {
+    color: #fff;
+    font-size: 130%;
+    font-weight: bold;
+    display: block;
+    margin-top: 20px;
+    transition: transform .5s ease;
+}
+
+aside ul li.nav-divider{
+    margin: 14px 0;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.35);
+    transform: none;
+}
+
+aside ul a {
+    color: #fff;
+    text-decoration: none;
+}
+
+/* touch effect */
+aside ul li:hover, aside ul a:hover {
+    color: #faa20d;
+    text-decoration: none;
+    transform: scale(1.02);
+}
+
+main .features{
+    float: left;
+    color: #000000;
+    margin-top: 100px;
+    text-align: center;
+    width: 75%;
+}
+
+main .features h1{
+    font-size: 50px;
+}
+
+main .features p{
+    max-width: 400px;
+    margin: 20px auto;
+}
+
+main .features .home-intro{
+    max-width: 900px;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+main .features .note-message {
+    max-width: 700px;
+    margin: 20px auto;
+    text-align: left;
+    line-height: 1.5;
+}
+
+/* for news*/
+.alert-warning {
+    float: left;
+    clear: both;
+    width: 400px;
+    margin: 20px 34%;
+    text-align: left;
+}
+
+.alert-warning .note-preview {
+    margin-bottom: 12px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+form {
+    margin-left: 32%;
+    width: 500px;
+    margin-top: 50px;
+}
+
+.home-quick-link {
+    border: 2px solid #b76f00;
+    color: #8a5400;
+    font-size: 2.2rem !important;
+    font-weight: 900 !important;
+    background: #fffaf0;
+}
+
+.home-quick-link:hover,
+.home-quick-link:focus {
+    border-color: #8a5400;
+    color: #ffffff;
+    background: #b76f00;
+}
+
+main .features .btn-danger {
+    background-color: #d98a94;
+    border-color: #d98a94;
+    color: #ffffff;
+}
+
+main .features .btn-danger:hover,
+main .features .btn-danger:focus {
+    background-color: #cc7883;
+    border-color: #cc7883;
+    color: #ffffff;
+}
+
+main .features .btn-info {
+    background-color: #86c9d8;
+    border-color: #86c9d8;
+    color: #16343c;
+}
+
+main .features .btn-info:hover,
+main .features .btn-info:focus {
+    background-color: #74bccd;
+    border-color: #74bccd;
+    color: #16343c;
+}
