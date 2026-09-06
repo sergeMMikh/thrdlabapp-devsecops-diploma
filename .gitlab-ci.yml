@@ -1,0 +1,16 @@
+stages:
+  - lint
+
+lint:
+  stage: lint
+  image: python:3.10-slim
+
+  before_script:
+    - python --version
+    - pip install --no-cache-dir flake8 flake8-bugbear flake8-builtins pep8-naming flake8-commas flake8-variables-names
+
+  script:
+    - python -m flake8 .
+
+  rules:
+    - if: "$CI_COMMIT_BRANCH"
