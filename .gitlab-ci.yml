@@ -2,6 +2,7 @@ stages:
   - validate
   - auth
   - lint
+  - build
 
 validate:variables:
   stage: validate
@@ -58,3 +59,39 @@ lint:
 
   script:
     - python -m flake8 .
+
+build:image:
+  stage: build
+  image: docker:27-cli
+
+  services:
+    - name: docker:27-dind
+      alias: docker
+
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+
+  before_script:
+    - echo "$DOCKERHUB_TOKEN" | docker login
+      --username "$DOCKERHUB_USERNAME"
+      --password-stdin
+
+  script:
+    - IMAGE="$DOCKERHUB_USERNAME/thrdlabapp-devsecops-diploma"
+    - TAG="$CI_COMMIT_SHORT_SHA"
+
+    - echo "Building Docker image with tag $TAG"
+
+    - docker build
+      -t "$IMAGE:$TAG"
+      -t "$IMAGE:latest"
+      .
+
+    - docker push "$IMAGE:$TAG"
+    - docker push "$IMAGE:latest"
+
+    - echo "Docker image published successfully"
+
+  after_script:
+    - docker logout
