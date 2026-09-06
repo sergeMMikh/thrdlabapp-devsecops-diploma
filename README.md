@@ -6,7 +6,7 @@
 
 Задание Нетологии: [sib-Diplom-Track-DevSecOps](https://github.com/netology-code/sib-Diplom-Track-DevSecOps)
 
-Исходный репозиторий приложения: _будет добавлен позже_.
+Исходный репозиторий приложения: [THRDLabApp](https://github.com/sergeMMikh/thrdlabapp.git).
 
 ---
 
@@ -36,7 +36,7 @@
 - наружу опубликованы только необходимые сервисы;
 - секреты не хранятся в репозитории.
 
-<details> 
+<details>
 <summary>Скриншоты</summary>
 
 </br>
@@ -44,7 +44,7 @@
 
 ![docker ps](image.png)</br>
 
-Web приложениие
+Web приложение
 
 ![web-app](image-1.png)</br>
 
@@ -58,12 +58,10 @@ Web приложениие
 
 </details>
 
-Ссылки на репозитории поекта:
+Ссылки на репозитории проекта:
 * [Исходный проект](https://github.com/sergeMMikh/thrdlabapp.git)
 * [GitLab](https://gitlab.com/sergeMMikh/thrdlabapp-devsecops-diploma.git)
 * [DockerHub](https://hub.docker.com/repository/docker/sergemmikh/thrdlabapp-devsecops-diploma/general)
-
-
 
 ### Этап 1. CI/CD
 
@@ -73,106 +71,151 @@ Web приложениие
 2. использование удалённого сервера для развёртывания;
 3. документированный процесс.
 
-#### Выбранная архитектура
+#### Реализованная архитектура
 
 Для CI/CD используется **GitLab CI/CD**, для хранения собранных контейнерных образов — **Docker Hub**, а целевой средой развёртывания является учебный VPS.
 
-Принципиальное решение этапа — **не собирать приложение на целевом сервере**. Docker-образ является готовым версионируемым артефактом: он собирается в CI, публикуется в Docker Hub и только после успешного прохождения pipeline доставляется на VPS.
+Принципиальное решение этапа — **не собирать приложение на целевом сервере**. Docker-образ является готовым версионируемым артефактом: он собирается в CI, публикуется в Docker Hub и после успешного прохождения предыдущих стадий доставляется на VPS.
+
+Pipeline на текущем этапе реализован как последовательность:
 
 ```text
-Developer
+validate
+   |
+   v
+auth
+   |-- Docker Hub authentication
+   `-- SSH authentication
+   |
+   v
+lint
+   |
+   v
+build
+   |-- docker build
+   |-- tag :<commit-sha>
+   `-- push -> Docker Hub
+   |
+   v
+deploy
+   |-- SSH -> training VPS
+   |-- docker compose pull
+   |-- docker compose up -d
+   `-- application starts with persistent PostgreSQL data
+```
+
+Docker-образ публикуется с тегом, соответствующим commit SHA. Это обеспечивает трассируемость:
+
+```text
+Git commit
     |
-    | git push
     v
-GitLab repository
-    |
-    +--> lint
-    |
-    +--> tests
-    |
-    +--> Docker build
-    |        |
-    |        v
-    |    Docker Hub
-    |    image:<commit-sha>
-    |        |
-    +--------+
+GitLab pipeline
     |
     v
-GitLab deploy job
+Docker image:<commit-sha>
     |
-    | SSH :2217
     v
 Training VPS
-    |
-    +--> docker compose pull
-    |
-    +--> docker compose up -d
-    |
-    v
-Healthcheck
 ```
 
-Таким образом, исходный код не требуется собирать непосредственно на целевом сервере. Сервер получает тот же контейнерный артефакт, который был создан и проверен в CI.
+Таким образом, можно однозначно определить, какой исходный код соответствует реально развёрнутому контейнеру, а также выполнить откат на предыдущий образ.
 
-Docker-образы планируется версионировать по commit SHA, например:
+Production Compose использует готовый `image:`, а не локальный `build:`. PostgreSQL хранит данные в постоянном Docker volume, поэтому пересоздание контейнера приложения и доставка нового образа не приводят к пересозданию базы данных. При старте приложения Django применяет только отсутствующие миграции.
+
+Использование контейнерного образа как основного deployment artifact также позволяет в дальнейшем использовать тот же образ для развёртывания в Kubernetes без изменения принципа доставки приложения.
+
+#### Разделение runner-ов
+
+Для проекта настроен собственный **GitLab Runner** в WSL (Ubuntu 22.04) с Docker executor. Он используется как контролируемая CI-среда для локальных стадий pipeline и в дальнейшем будет использоваться для security scanning.
+
+При настройке CD было выявлено сетевое ограничение: университетская сеть, в которой работает self-hosted WSL runner, блокирует исходящие подключения к SSH-порту `2217` учебного VPS. Поэтому deployment с этого runner технически невозможен без изменения сетевой инфраструктуры.
+
+В связи с этим задачи pipeline разделены между runner-ами:
 
 ```text
-<dockerhub-user>/thrdlabapp:<commit-sha>
+GitLab
+   |
+   +--> Self-hosted WSL Runner (Docker executor)
+   |       |
+   |       +--> validate
+   |       +--> Docker Hub authentication
+   |       +--> lint
+   |       +--> build
+   |       `--> security checks (следующие этапы)
+   |
+   `--> GitLab-hosted Runner
+           |
+           +--> SSH authentication
+           `--> deploy -> VPS:2217
 ```
 
-Это обеспечивает связь между исходным кодом, результатом pipeline и реально развёрнутой версией приложения, а также позволяет выполнить откат на предыдущий проверенный образ.
+Такое разделение является следствием сетевого ограничения, а не способом обхода security checks. Deploy остаётся отдельной финальной стадией pipeline и выполняется только после успешного завершения зависимых CI-задач.
 
-Использование контейнерного образа как основного deployment artifact также оставляет возможность в дальнейшем использовать тот же образ для развёртывания приложения в Kubernetes, если это потребуется для развития проекта. Таким образом, выбранная схема не привязывает приложение только к Docker Compose на одном VPS.
+С точки зрения безопасности CI/CD разделение runner-ов не снижает контроль над релизом при соблюдении следующих условий:
+
+- deployment job не выполняет повторную сборку приложения;
+- на VPS доставляется именно образ, созданный предыдущей стадией pipeline;
+- образ идентифицируется immutable-тегом на основе commit SHA;
+- секреты Docker Hub и SSH хранятся в защищённых GitLab CI/CD variables и не находятся в репозитории;
+- deployment выполняется по SSH с ключевой аутентификацией;
+- целевой сервер не используется как CI/build runner;
+- будущий Security Gateway располагается **до deployment**, поэтому GitLab-hosted deploy runner не сможет выпустить артефакт, не прошедший обязательные security checks.
+
+Дополнительным преимуществом такого разделения является уменьшение совмещения ролей: self-hosted runner выполняет сборку и анализ, а deployment выполняется отдельным runner. При этом необходимо учитывать границу доверия между двумя средами. Поэтому в дальнейшей реализации pipeline deployment будет привязан к конкретному проверенному тегу/commit SHA, а доступ к deployment credentials будет предоставляться только deployment job в защищённой ветке.
 
 #### Разделение ответственности
 
 ```text
-GitHub      — основной репозиторий проекта и документации
-GitLab      — CI/CD pipeline
-Docker Hub  — registry готовых Docker-образов
-VPS         — целевая среда развёртывания
+GitHub             — основной репозиторий проекта и документации
+GitLab             — CI/CD pipeline
+WSL GitLab Runner  — build и security jobs
+GitLab Runner      — deployment transport до VPS
+Docker Hub         — registry готовых Docker-образов
+VPS                — целевая среда развёртывания
 ```
 
-Для работы с GitHub и GitLab предполагается использовать один локальный Git-репозиторий с отдельными remote. CI/CD выполняется на стороне GitLab.
+Для работы с GitHub и GitLab используется один локальный Git-репозиторий с отдельными remote. CI/CD выполняется на стороне GitLab.
 
-#### План реализации этапа
+#### Реализовано
 
-- создать GitLab-репозиторий для CI/CD;
-- подключить его как дополнительный Git remote;
-- подготовить `.gitlab-ci.yml`;
-- запускать lint и тесты приложения;
-- собирать Docker-образ только после успешных проверок;
-- аутентифицироваться в Docker Hub через CI/CD variables;
-- публиковать образ с тегом commit SHA;
-- подготовить production Compose, использующий `image:`, а не локальный `build:`;
-- настроить SSH-доставку на учебный VPS через порт `2217`;
-- выполнять на сервере `docker compose pull` и `docker compose up -d`;
-- выполнять healthcheck после deployment;
-- сохранять результаты pipeline как evidence.
+- создан GitLab-репозиторий и подключён отдельным Git remote;
+- подготовлен `.gitlab-ci.yml`;
+- настроены protected CI/CD variables;
+- отдельно проверяется наличие обязательных переменных;
+- проверена аутентификация в Docker Hub;
+- проверена SSH-аутентификация на учебном VPS;
+- настроен self-hosted GitLab Runner в WSL с Docker executor;
+- реализован lint через отдельный `requirements-lint.txt`;
+- Docker-образ собирается после успешного lint;
+- образ публикуется в Docker Hub с тегом commit SHA;
+- подготовлен `compose.prod.yaml`, использующий готовый Docker image;
+- настроен автоматический deployment по SSH;
+- PostgreSQL использует постоянный Docker volume;
+- выполнен успешный pipeline `validate -> auth -> lint -> build -> deploy`;
+- после автоматического deployment подтверждена работоспособность Django-приложения на учебном VPS.
 
-Первоначальная последовательность pipeline:
+#### Дальнейшее развитие CI/CD
+
+На следующих этапах текущий pipeline будет расширен тестированием и security-проверками. Deployment должен стать конечной точкой после Security Gateway:
 
 ```text
-lint
-  |
-  v
-tests
-  |
-  v
-Docker build
-  |
-  v
-Docker Hub
-  |
-  v
-deploy VPS
-  |
-  v
-healthcheck
+commit
+   |
+   v
+lint -> tests -> SAST/SCA/Secrets -> build -> image scan
+                                      |
+                                      v
+                               Security Gateway
+                                      |
+                         PASS --------+-------- FAIL
+                           |                     |
+                           v                     v
+                       Docker Hub           block release
+                           |
+                           v
+                        deploy
 ```
-
-По мере выполнения следующих этапов диплома этот же pipeline будет расширяться security-проверками и постепенно преобразовываться в полноценный DevSecOps pipeline.
 
 ### Этап 2. SAST
 
@@ -311,6 +354,8 @@ Docker image ----------------> Image Scan ----+
 |---|---|
 | Source / documentation | GitHub |
 | CI/CD | GitLab CI/CD |
+| CI runner | Self-hosted GitLab Runner / WSL / Docker executor |
+| Deployment runner | GitLab-hosted Runner |
 | Container registry | Docker Hub |
 | Containerization | Docker / Docker Compose |
 | Future orchestration | Kubernetes (при необходимости) |
@@ -341,6 +386,7 @@ Docker image ----------------> Image Scan ----+
 - найденные уязвимости не только фиксируются, но и анализируются;
 - false positives документируются;
 - критические проблемы должны иметь возможность остановить релиз;
+- deployment credentials должны быть доступны только jobs, которым они действительно необходимы;
 - все ключевые решения и результаты отражаются в документации.
 
 ---
@@ -349,8 +395,8 @@ Docker image ----------------> Image Scan ----+
 
 | Этап | Статус |
 |---|---|
-| 0. Подготовка стенда | В работе |
-| 1. CI/CD | Проектирование |
+| 0. Подготовка стенда | Выполнен |
+| 1. CI/CD | Базовый pipeline и deployment выполнены |
 | 2. SAST | Не начат |
 | 3. DAST | Не начат |
 | 4. Security Checks | Не начат |
