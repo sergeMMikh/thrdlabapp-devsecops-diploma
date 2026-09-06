@@ -27,6 +27,27 @@ auth:dockerhub:
     - echo "Docker Hub authentication successful"
     - docker logout
 
+auth:ssh:
+  stage: auth
+  image: alpine:3.20
+
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -d -m 700 ~/.ssh
+    - install -m 600 "$DEPLOY_SSH_KEY" ~/.ssh/deploy_key
+    - ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
+    - chmod 600 ~/.ssh/known_hosts
+
+  script:
+    - >
+      ssh
+      -i ~/.ssh/deploy_key
+      -p "$DEPLOY_PORT"
+      -o BatchMode=yes
+      -o StrictHostKeyChecking=yes
+      "$DEPLOY_USER@$DEPLOY_HOST"
+      'echo "SSH authentication successful"'
+
 lint:
   stage: lint
   image: python:3.10-slim
