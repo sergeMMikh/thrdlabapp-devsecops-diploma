@@ -1,5 +1,19 @@
 stages:
+  - validate
   - lint
+
+validate:variables:
+  stage: validate
+  image: alpine:3.20
+
+  script:
+    - test -n "$DOCKERHUB_USERNAME"
+    - test -n "$DOCKERHUB_TOKEN"
+    - test -n "$DEPLOY_HOST"
+    - test -n "$DEPLOY_PORT"
+    - test -n "$DEPLOY_USER"
+    - test -n "$DEPLOY_SSH_KEY"
+    - echo "All required CI/CD variables are available"
 
 lint:
   stage: lint
@@ -11,6 +25,3 @@ lint:
 
   script:
     - python -m flake8 .
-
-  rules:
-    - if: "$CI_COMMIT_BRANCH"
