@@ -44,39 +44,106 @@
 2. использование удалённого сервера для развёртывания;
 3. документированный процесс.
 
-План реализации:
+#### Выбранная архитектура
 
-- использовать GitHub Actions;
-- запускать lint и тесты приложения;
-- собирать Docker-образ;
-- публиковать образ в container registry;
-- автоматически разворачивать успешную сборку на учебном VPS;
-- добавить healthcheck после deployment;
-- сохранять результаты pipeline как evidence.
+Для CI/CD используется **GitLab CI/CD**, для хранения собранных контейнерных образов — **Docker Hub**, а целевой средой развёртывания является учебный VPS.
 
-Целевая последовательность:
+Принципиальное решение этапа — **не собирать приложение на целевом сервере**. Docker-образ является готовым версионируемым артефактом: он собирается в CI, публикуется в Docker Hub и только после успешного прохождения pipeline доставляется на VPS.
 
 ```text
-commit / pull request
-        |
-        v
-      lint
-        |
-        v
-      tests
-        |
-        v
- Docker build
-        |
-        v
- image registry
-        |
-        v
-     deploy
-        |
-        v
-   healthcheck
+Developer
+    |
+    | git push
+    v
+GitLab repository
+    |
+    +--> lint
+    |
+    +--> tests
+    |
+    +--> Docker build
+    |        |
+    |        v
+    |    Docker Hub
+    |    image:<commit-sha>
+    |        |
+    +--------+
+    |
+    v
+GitLab deploy job
+    |
+    | SSH :2217
+    v
+Training VPS
+    |
+    +--> docker compose pull
+    |
+    +--> docker compose up -d
+    |
+    v
+Healthcheck
 ```
+
+Таким образом, исходный код не требуется собирать непосредственно на целевом сервере. Сервер получает тот же контейнерный артефакт, который был создан и проверен в CI.
+
+Docker-образы планируется версионировать по commit SHA, например:
+
+```text
+<dockerhub-user>/thrdlabapp:<commit-sha>
+```
+
+Это обеспечивает связь между исходным кодом, результатом pipeline и реально развёрнутой версией приложения, а также позволяет выполнить откат на предыдущий проверенный образ.
+
+Использование контейнерного образа как основного deployment artifact также оставляет возможность в дальнейшем использовать **тот же образ для развёртывания приложения в Kubernetes**, если это потребуется для развития проекта. Таким образом, выбранная схема не привязывает приложение только к Docker Compose на одном VPS.
+
+#### Разделение ответственности
+
+```text
+GitHub      — основной репозиторий проекта и документации
+GitLab      — CI/CD pipeline
+Docker Hub  — registry готовых Docker-образов
+VPS         — целевая среда развёртывания
+```
+
+Для работы с GitHub и GitLab предполагается использовать один локальный Git-репозиторий с отдельными remote. CI/CD выполняется на стороне GitLab.
+
+#### План реализации этапа
+
+- создать GitLab-репозиторий для CI/CD;
+- подключить его как дополнительный Git remote;
+- подготовить `.gitlab-ci.yml`;
+- запускать lint и тесты приложения;
+- собирать Docker-образ только после успешных проверок;
+- аутентифицироваться в Docker Hub через CI/CD variables;
+- публиковать образ с тегом commit SHA;
+- подготовить production Compose, использующий `image:`, а не локальный `build:`;
+- настроить SSH-доставку на учебный VPS через порт `2217`;
+- выполнять на сервере `docker compose pull` и `docker compose up -d`;
+- выполнять healthcheck после deployment;
+- сохранять результаты pipeline как evidence.
+
+Первоначальная последовательность pipeline:
+
+```text
+lint
+  |
+  v
+tests
+  |
+  v
+Docker build
+  |
+  v
+Docker Hub
+  |
+  v
+deploy VPS
+  |
+  v
+healthcheck
+```
+
+По мере выполнения следующих этапов диплома этот же pipeline будет расширяться security-проверками и постепенно преобразовываться в полноценный DevSecOps pipeline.
 
 ### Этап 2. SAST
 
@@ -90,9 +157,8 @@ commit / pull request
 
 - выполнить статический анализ Python/Django-кода;
 - использовать несколько подходящих инструментов, например Semgrep и Bandit;
-- запускать SAST автоматически в GitHub Actions;
+- запускать SAST автоматически в GitLab CI/CD;
 - сохранять отчёты как artifacts;
-- при возможности публиковать результаты в SARIF / GitHub Code Scanning;
 - провести анализ найденных проблем и ложных срабатываний.
 
 Цель — покрыть проверками весь применимый исходный код проекта.
@@ -117,7 +183,7 @@ commit / pull request
 Целевая схема:
 
 ```text
-GitHub Actions
+GitLab CI/CD
       |
       v
    deploy
@@ -145,7 +211,7 @@ DAST report
 - dependency scanning — pip-audit и/или Trivy;
 - container image scanning — Trivy;
 - Dockerfile / configuration checks;
-- проверка GitHub Actions и deployment-конфигурации;
+- проверка CI/CD и deployment-конфигурации;
 - формирование SBOM при необходимости;
 - сохранение отчётов в artifacts.
 
@@ -167,7 +233,7 @@ source code
 Критерии задания:
 
 1. остановка релиза при наличии недопустимых уязвимостей;
-2. дополнительные автоматизированные действия: комментарии в PR/MR и рекомендации по исправлению.
+2. дополнительные автоматизированные действия: комментарии в MR и рекомендации по исправлению.
 
 План реализации:
 
@@ -175,22 +241,24 @@ source code
 - блокировать deployment при критических результатах security scans;
 - определить допустимые уровни `Critical`, `High`, `Medium`, `Low`;
 - агрегировать результаты SAST, DAST, secret scanning и container scanning;
-- выводить понятный Security Summary в GitHub Actions;
-- публиковать информацию о проблемах в pull request;
+- выводить понятный Security Summary в GitLab CI/CD;
+- публиковать информацию о проблемах в merge request;
 - документировать исключения и false positives.
 
-Пример целевого pipeline:
+Целевой pipeline:
 
 ```text
-                +--> SAST -----------+
-                |                    |
-commit --> tests+--> Secret Scan ----+--> Security Gateway --> Build/Deploy
-                |                    |
-                +--> SCA/Image Scan -+
-                                     |
-                                     +--> block release
-                                     +--> report
-                                     +--> PR feedback
+                         +--> SAST -----------+
+                         |                    |
+commit --> lint --> tests+--> Secret Scan ----+--> Security Gateway --> Build --> Docker Hub --> Deploy
+                         |                    |
+                         +--> SCA ------------+
+                                              |
+Docker image ----------------> Image Scan ----+
+                                              |
+                                              +--> block release
+                                              +--> report
+                                              +--> MR feedback
 ```
 
 ### Этап 6. Анализ результатов и итоговая документация
@@ -212,8 +280,11 @@ commit --> tests+--> Secret Scan ----+--> Security Gateway --> Build/Deploy
 
 | Задача | Инструмент |
 |---|---|
-| CI/CD | GitHub Actions |
+| Source / documentation | GitHub |
+| CI/CD | GitLab CI/CD |
+| Container registry | Docker Hub |
 | Containerization | Docker / Docker Compose |
+| Future orchestration | Kubernetes (при необходимости) |
 | Web application | Django / Gunicorn |
 | Database | PostgreSQL |
 | SAST | Semgrep, Bandit |
@@ -221,8 +292,8 @@ commit --> tests+--> Secret Scan ----+--> Security Gateway --> Build/Deploy
 | Secret scanning | Gitleaks |
 | Container scanning | Trivy |
 | DAST | OWASP ZAP |
-| Security reports | GitHub Actions artifacts / SARIF |
-| Security Gateway | GitHub Actions jobs and release conditions |
+| Security reports | GitLab CI artifacts / reports |
+| Security Gateway | GitLab CI jobs, rules and release conditions |
 
 Состав инструментов может уточняться по мере выполнения работы. Для каждого выбранного средства в итоговой документации будет указана причина выбора и область покрытия.
 
@@ -233,8 +304,10 @@ commit --> tests+--> Secret Scan ----+--> Security Gateway --> Build/Deploy
 При разработке pipeline придерживаемся следующих правил:
 
 - каждый этап сначала реализуется и проверяется отдельно;
+- Docker-образ является основным версионируемым артефактом доставки;
+- целевой сервер не используется как build-среда приложения;
 - security checks являются частью CI/CD, а не отдельной ручной процедурой;
-- реальные секреты не коммитятся в Git;
+- реальные секреты не коммитятся в Git и не включаются в Docker image;
 - результаты проверок сохраняются и доступны для анализа;
 - найденные уязвимости не только фиксируются, но и анализируются;
 - false positives документируются;
@@ -248,7 +321,7 @@ commit --> tests+--> Secret Scan ----+--> Security Gateway --> Build/Deploy
 | Этап | Статус |
 |---|---|
 | 0. Подготовка стенда | В работе |
-| 1. CI/CD | Не начат |
+| 1. CI/CD | Проектирование |
 | 2. SAST | Не начат |
 | 3. DAST | Не начат |
 | 4. Security Checks | Не начат |
