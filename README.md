@@ -39,10 +39,22 @@
 <details> 
 <summary>Скриншоты</summary>
 
-![git](image-3.png)</br>
+</br>
+Список поднятых Docker контейнеров на целевом хосте
+
 ![docker ps](image.png)</br>
+
+Web приложениие
+
 ![web-app](image-1.png)</br>
+
+Панель администратора Django
+
 ![admin](image-2.png)</br>
+
+Подключение git репозиториев
+
+![git](image-3.png)</br>
 
 </details>
 
