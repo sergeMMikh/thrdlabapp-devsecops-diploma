@@ -1,5 +1,6 @@
 stages:
   - validate
+  - auth
   - lint
 
 validate:variables:
@@ -14,6 +15,17 @@ validate:variables:
     - test -n "$DEPLOY_USER"
     - test -n "$DEPLOY_SSH_KEY"
     - echo "All required CI/CD variables are available"
+
+auth:dockerhub:
+  stage: auth
+  image: docker:27-cli
+
+  script:
+    - echo "$DOCKERHUB_TOKEN" | docker login
+      --username "$DOCKERHUB_USERNAME"
+      --password-stdin
+    - echo "Docker Hub authentication successful"
+    - docker logout
 
 lint:
   stage: lint
