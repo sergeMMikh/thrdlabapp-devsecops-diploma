@@ -1,7 +1,3 @@
-default:
-  tags:
-    - thrdlabapp
-
 stages:
   - validate
   - auth
@@ -45,16 +41,8 @@ auth:ssh:
     - chmod 600 ~/.ssh/known_hosts
 
   script:
-    - echo "Checking SSH key file"
-    - test -f "$DEPLOY_SSH_KEY"
-    - ls -l "$DEPLOY_SSH_KEY"
-
-    - echo "Checking network connectivity"
-    - nc -vz "$DEPLOY_HOST" "$DEPLOY_PORT"
-
-    - echo "Checking SSH authentication"
     - >
-      ssh -vv
+      ssh
       -i ~/.ssh/deploy_key
       -p "$DEPLOY_PORT"
       -o BatchMode=yes
@@ -62,18 +50,10 @@ auth:ssh:
       "$DEPLOY_USER@$DEPLOY_HOST"
       'echo "SSH authentication successful"'
 
-  # script:
-  #   - >
-  #     ssh
-  #     -i ~/.ssh/deploy_key
-  #     -p "$DEPLOY_PORT"
-  #     -o BatchMode=yes
-  #     -o StrictHostKeyChecking=yes
-  #     "$DEPLOY_USER@$DEPLOY_HOST"
-  #     'echo "SSH authentication successful"'
-
 lint:
   stage: lint
+  tags:
+    - thrdlabapp
   image: python:3.10-slim
 
   before_script:
@@ -85,6 +65,8 @@ lint:
 
 build:image:
   stage: build
+  tags:
+    - thrdlabapp
   image: docker:27-cli
 
   services:
