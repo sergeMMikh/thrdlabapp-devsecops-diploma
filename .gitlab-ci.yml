@@ -45,14 +45,32 @@ auth:ssh:
     - chmod 600 ~/.ssh/known_hosts
 
   script:
+    - echo "Checking SSH key file"
+    - test -f "$DEPLOY_SSH_KEY"
+    - ls -l "$DEPLOY_SSH_KEY"
+
+    - echo "Checking network connectivity"
+    - nc -vz "$DEPLOY_HOST" "$DEPLOY_PORT"
+
+    - echo "Checking SSH authentication"
     - >
-      ssh
+      ssh -vv
       -i ~/.ssh/deploy_key
       -p "$DEPLOY_PORT"
       -o BatchMode=yes
       -o StrictHostKeyChecking=yes
       "$DEPLOY_USER@$DEPLOY_HOST"
       'echo "SSH authentication successful"'
+
+  # script:
+  #   - >
+  #     ssh
+  #     -i ~/.ssh/deploy_key
+  #     -p "$DEPLOY_PORT"
+  #     -o BatchMode=yes
+  #     -o StrictHostKeyChecking=yes
+  #     "$DEPLOY_USER@$DEPLOY_HOST"
+  #     'echo "SSH authentication successful"'
 
 lint:
   stage: lint
