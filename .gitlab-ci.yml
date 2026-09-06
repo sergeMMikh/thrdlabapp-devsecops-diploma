@@ -1,8 +1,13 @@
+default:
+  tags:
+    - thrdlabapp
+
 stages:
   - validate
   - auth
   - lint
   - build
+  - deploy
 
 validate:variables:
   stage: validate
@@ -95,3 +100,33 @@ build:image:
 
   after_script:
     - docker logout
+
+deploy:production:
+  stage: deploy
+  image: alpine:3.20
+
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -d -m 700 ~/.ssh
+    - install -m 600 "$DEPLOY_SSH_KEY" ~/.ssh/deploy_key
+    - ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
+    - chmod 600 ~/.ssh/known_hosts
+
+  script:
+    - >
+      ssh
+      -i ~/.ssh/deploy_key
+      -p "$DEPLOY_PORT"
+      -o BatchMode=yes
+      -o StrictHostKeyChecking=yes
+      "$DEPLOY_USER@$DEPLOY_HOST"
+      "
+      cd ~/thrdlabapp-devsecops-diploma &&
+      export IMAGE_TAG='$CI_COMMIT_SHORT_SHA' &&
+      docker compose -f compose.prod.yaml pull web &&
+      docker compose -f compose.prod.yaml up -d &&
+      docker compose -f compose.prod.yaml ps
+      "
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
