@@ -7,7 +7,7 @@ lint:
 
   before_script:
     - python --version
-    - pip install --no-cache-dir flake8 flake8-bugbear flake8-builtins pep8-naming flake8-commas flake8-variables-names
+    - pip install --no-cache-dir -r requirements-lint.txt
 
   script:
     - python -m flake8 .
