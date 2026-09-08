@@ -3,6 +3,7 @@ stages:
   - auth
   - lint
   - test
+  - sast
   - build
   - deploy
 
@@ -102,6 +103,52 @@ test:
       - pytest-report.xml
     expire_in: 1 week
 
+sast:bandit:
+  stage: sast
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image: python:3.10-slim
+  needs:
+    - test
+
+  before_script:
+    - python --version
+    - pip install --no-cache-dir -r requirements-security.txt
+
+  script:
+    - bandit -r . -f json -o bandit-report.json
+
+  artifacts:
+    when: always
+    paths:
+      - bandit-report.json
+    expire_in: 1 week
+
+  allow_failure: true
+
+sast:semgrep:
+  stage: sast
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image: semgrep/semgrep:1.136.0
+  needs:
+    - test
+
+  script:
+    - semgrep scan --config auto --json --output semgrep-report.json .
+
+  artifacts:
+    when: always
+    paths:
+      - semgrep-report.json
+    expire_in: 1 week
+
+  allow_failure: true
+
 build:image:
   stage: build
   tags:
@@ -109,6 +156,8 @@ build:image:
     - docker
     - build
   image: docker:27-cli
+  needs:
+    - test
 
   services:
     - name: docker:27-dind
@@ -145,6 +194,10 @@ build:image:
 deploy:production:
   stage: deploy
   image: alpine:3.20
+  needs:
+    - build:image
+    - sast:bandit
+    - sast:semgrep
 
   before_script:
     - apk add --no-cache openssh-client
