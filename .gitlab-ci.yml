@@ -71,7 +71,12 @@ test:
   image: python:3.10-slim
 
   before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends chromium chromium-driver
+    - rm -rf /var/lib/apt/lists/*
     - python --version
+    - chromium --version
+    - chromedriver --version
     - pip install --no-cache-dir -r requirements.txt
 
   script:
