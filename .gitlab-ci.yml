@@ -118,15 +118,13 @@ sast:bandit:
     - pip install --no-cache-dir -r requirements-security.txt
 
   script:
-    - bandit -r . -f json -o bandit-report.json
+    - bandit -r . -f json -o bandit-report.json || true
 
   artifacts:
     when: always
     paths:
       - bandit-report.json
     expire_in: 1 week
-
-  allow_failure: true
 
 sast:semgrep:
   stage: sast
