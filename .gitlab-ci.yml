@@ -8,6 +8,10 @@ stages:
 
 validate:variables:
   stage: validate
+  tags:
+    - thrdlabapp
+    - docker
+    - build
   image: alpine:3.20
 
   script:
@@ -21,6 +25,10 @@ validate:variables:
 
 auth:dockerhub:
   stage: auth
+  tags:
+    - thrdlabapp
+    - docker
+    - build
   image: docker:27-cli
 
   script:
@@ -55,6 +63,8 @@ lint:
   stage: lint
   tags:
     - thrdlabapp
+    - docker
+    - build
   image: python:3.10-slim
 
   before_script:
@@ -68,6 +78,8 @@ test:
   stage: test
   tags:
     - thrdlabapp
+    - docker
+    - build
   image: python:3.10-slim
 
   before_script:
@@ -94,6 +106,8 @@ build:image:
   stage: build
   tags:
     - thrdlabapp
+    - docker
+    - build
   image: docker:27-cli
 
   services:
