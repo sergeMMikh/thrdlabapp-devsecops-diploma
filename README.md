@@ -77,7 +77,7 @@ Web приложение
 
 Принципиальное решение этапа — **не собирать приложение на целевом сервере**. Docker-образ является готовым версионируемым артефактом: он собирается в CI, публикуется в Docker Hub и после успешного прохождения предыдущих стадий доставляется на VPS.
 
-Pipeline на текущем этапе реализован как последовательность:
+Базовая последовательность pipeline:
 
 ```text
 validate
@@ -91,17 +91,17 @@ auth
 lint
    |
    v
-build
-   |-- docker build
-   |-- tag :<commit-sha>
-   `-- push -> Docker Hub
+test (pytest)
    |
-   v
-deploy
-   |-- SSH -> training VPS
-   |-- docker compose pull
-   |-- docker compose up -d
-   `-- application starts with persistent PostgreSQL data
+   +----------------------+----------------------+
+   |                      |                      |
+   v                      v                      v
+SAST: Bandit         SAST: Semgrep          build:image
+   |                      |                      |
+   +----------------------+----------------------+
+                          |
+                          v
+                       deploy
 ```
 
 Docker-образ публикуется с тегом, соответствующим commit SHA. Это обеспечивает трассируемость:
@@ -119,63 +119,76 @@ Docker image:<commit-sha>
 Training VPS
 ```
 
-Таким образом, можно однозначно определить, какой исходный код соответствует реально развёрнутому контейнеру, а также выполнить откат на предыдущий образ.
-
 Production Compose использует готовый `image:`, а не локальный `build:`. PostgreSQL хранит данные в постоянном Docker volume, поэтому пересоздание контейнера приложения и доставка нового образа не приводят к пересозданию базы данных. При старте приложения Django применяет только отсутствующие миграции.
 
 Использование контейнерного образа как основного deployment artifact также позволяет в дальнейшем использовать тот же образ для развёртывания в Kubernetes без изменения принципа доставки приложения.
 
+#### Автоматические тесты pytest
+
+Перед сборкой и security-анализом выполняется отдельный CI job `test`. Pytest настроен через `setup.cfg`; тесты находятся в каталоге `tests`. Результаты публикуются в GitLab CI в формате JUnit (`pytest-report.xml`) и сохраняются как artifact.
+
+В CI дополнительно устанавливаются Chromium и ChromeDriver, поскольку набор тестов включает Selenium-проверку реальной загрузки главной страницы в headless-браузере.
+
+Текущий набор pytest покрывает:
+
+- **модели и ограничения БД (`tests/main/test_models.py`)** — создание обычного пользователя и superuser, обязательность email/password, строковые представления моделей, генерация и уникальность email-токенов, связи Person с Furnace/Equipment, уникальность бронирований, значения и URL новостей, обновление объектов и каскадное удаление связанных записей;
+- **основные Django views (`tests/main/test_views.py`)** — рендеринг Home/About/Contacts, группировка печей по лабораториям, вывод последних новостей, создание новости с валидными и невалидными данными, detail/update/delete для новости;
+- **пользовательский API (`tests/users/test_user_views.py`)** — успешная и ошибочная регистрация, ограничения длины имени и email, login подтверждённого пользователя, запрет login неподтверждённого пользователя, подтверждение аккаунта, verification email, проверка authentication для редактирования профиля, изменение данных пользователя, запрос и подтверждение сброса пароля;
+- **Selenium (`tests/main/test_test.py`)** — запуск headless Chromium против Django `live_server` и проверка загрузки главной страницы и её title;
+- базовый smoke-test окружения pytest.
+
+Сборка Docker-образа запускается только после успешного прохождения lint и функциональных тестов. Это не позволяет передавать в дальнейшие стадии код, не прошедший базовую проверку работоспособности.
+
 #### Разделение runner-ов
 
-Для проекта настроен собственный **GitLab Runner** в WSL (Ubuntu 22.04) с Docker executor. Он используется как контролируемая CI-среда для локальных стадий pipeline и в дальнейшем будет использоваться для security scanning.
+На постоянно доступном WSL-хосте `DEM-PC1064` используются три регистрации GitLab Runner с Docker executor. Глобальная параллельность runner manager настроена через `concurrent = 3`.
 
-При настройке CD было выявлено сетевое ограничение: университетская сеть, в которой работает self-hosted WSL runner, блокирует исходящие подключения к SSH-порту `2217` учебного VPS. Поэтому deployment с этого runner технически невозможен без изменения сетевой инфраструктуры.
-
-В связи с этим задачи pipeline разделены между runner-ами:
+Роли разделены тегами:
 
 ```text
-GitLab
-   |
-   +--> Self-hosted WSL Runner (Docker executor)
-   |       |
-   |       +--> validate
-   |       +--> Docker Hub authentication
-   |       +--> lint
-   |       +--> build
-   |       `--> security checks (следующие этапы)
-   |
-   `--> GitLab-hosted Runner
-           |
-           +--> SSH authentication
-           `--> deploy -> VPS:2217
+Build runner
+  tags: thrdlabapp, docker, build
+  jobs: validate, Docker Hub auth, lint, pytest, build:image
+
+SAST runner
+  tags: thrdlabapp, security, sast
+  jobs: Bandit, Semgrep
+
+DAST runner
+  tags: thrdlabapp, security, dast
+  jobs: OWASP ZAP (следующий этап)
 ```
 
-Такое разделение является следствием сетевого ограничения, а не способом обхода security checks. Deploy остаётся отдельной финальной стадией pipeline и выполняется только после успешного завершения зависимых CI-задач.
+Build runner использует `privileged = true`, необходимый для Docker-in-Docker. Security runners работают без privileged mode, если конкретная проверка не требует обратного.
 
-С точки зрения безопасности CI/CD разделение runner-ов не снижает контроль над релизом при соблюдении следующих условий:
+Дополнительно существуют резервные runners на другом хосте, однако обязательные стадии основного pipeline на них не завязаны, поскольку этот хост доступен не постоянно.
+
+При настройке CD было выявлено сетевое ограничение: сеть, в которой работает основной self-hosted WSL runner, блокирует исходящие подключения к SSH-порту целевого VPS. Поэтому SSH authentication и deployment выполняются GitLab-hosted runner-ом, имеющим сетевой доступ к целевому серверу.
+
+Такое разделение является следствием сетевого ограничения, а не способом обхода security checks. Deploy остаётся отдельной финальной стадией pipeline и выполняется только после завершения зависимых CI/security-задач.
+
+С точки зрения безопасности CI/CD соблюдаются следующие условия:
 
 - deployment job не выполняет повторную сборку приложения;
 - на VPS доставляется именно образ, созданный предыдущей стадией pipeline;
-- образ идентифицируется immutable-тегом на основе commit SHA;
+- образ идентифицируется тегом на основе commit SHA;
 - секреты Docker Hub и SSH хранятся в защищённых GitLab CI/CD variables и не находятся в репозитории;
 - deployment выполняется по SSH с ключевой аутентификацией;
 - целевой сервер не используется как CI/build runner;
-- будущий Security Gateway располагается **до deployment**, поэтому GitLab-hosted deploy runner не сможет выпустить артефакт, не прошедший обязательные security checks.
-
-Дополнительным преимуществом такого разделения является уменьшение совмещения ролей: self-hosted runner выполняет сборку и анализ, а deployment выполняется отдельным runner. При этом необходимо учитывать границу доверия между двумя средами. Поэтому в дальнейшей реализации pipeline deployment будет привязан к конкретному проверенному тегу/commit SHA, а доступ к deployment credentials будет предоставляться только deployment job в защищённой ветке.
+- будущий Security Gateway располагается до deployment.
 
 #### Разделение ответственности
 
 ```text
-GitHub             — основной репозиторий проекта и документации
-GitLab             — CI/CD pipeline
-WSL GitLab Runner  — build и security jobs
-GitLab Runner      — deployment transport до VPS
-Docker Hub         — registry готовых Docker-образов
-VPS                — целевая среда развёртывания
+GitHub                 — основной репозиторий проекта и документации
+GitLab                 — CI/CD pipeline
+DEM-PC1064 Build       — lint, pytest, Docker build/push
+DEM-PC1064 SAST        — Bandit, Semgrep
+DEM-PC1064 DAST        — OWASP ZAP (следующий этап)
+GitLab-hosted Runner   — deployment transport до VPS
+Docker Hub             — registry готовых Docker-образов
+VPS                    — целевая среда развёртывания
 ```
-
-Для работы с GitHub и GitLab используется один локальный Git-репозиторий с отдельными remote. CI/CD выполняется на стороне GitLab.
 
 #### Реализовано
 
@@ -183,39 +196,17 @@ VPS                — целевая среда развёртывания
 - подготовлен `.gitlab-ci.yml`;
 - настроены protected CI/CD variables;
 - отдельно проверяется наличие обязательных переменных;
-- проверена аутентификация в Docker Hub;
-- проверена SSH-аутентификация на учебном VPS;
-- настроен self-hosted GitLab Runner в WSL с Docker executor;
+- проверена аутентификация в Docker Hub и SSH-аутентификация на VPS;
+- настроены специализированные self-hosted GitLab Runners с Docker executor;
 - реализован lint через отдельный `requirements-lint.txt`;
-- Docker-образ собирается после успешного lint;
+- добавлен автоматический запуск pytest с публикацией JUnit-отчёта;
+- для Selenium-теста CI-среда дополнена Chromium и ChromeDriver;
+- Docker-образ собирается после успешных lint и pytest;
 - образ публикуется в Docker Hub с тегом commit SHA;
 - подготовлен `compose.prod.yaml`, использующий готовый Docker image;
 - настроен автоматический deployment по SSH;
 - PostgreSQL использует постоянный Docker volume;
-- выполнен успешный pipeline `validate -> auth -> lint -> build -> deploy`;
 - после автоматического deployment подтверждена работоспособность Django-приложения на учебном VPS.
-
-#### Дальнейшее развитие CI/CD
-
-На следующих этапах текущий pipeline будет расширен тестированием и security-проверками. Deployment должен стать конечной точкой после Security Gateway:
-
-```text
-commit
-   |
-   v
-lint -> tests -> SAST/SCA/Secrets -> build -> image scan
-                                      |
-                                      v
-                               Security Gateway
-                                      |
-                         PASS --------+-------- FAIL
-                           |                     |
-                           v                     v
-                       Docker Hub           block release
-                           |
-                           v
-                        deploy
-```
 
 ### Этап 2. SAST
 
@@ -225,15 +216,80 @@ lint -> tests -> SAST/SCA/Secrets -> build -> image scan
 2. автоматический запуск проверок во время сборки;
 3. выгрузка результатов в CI или систему управления уязвимостями.
 
-План реализации:
+#### Выбор инструментов
 
-- выполнить статический анализ Python/Django-кода;
-- использовать несколько подходящих инструментов, например Semgrep и Bandit;
-- запускать SAST автоматически в GitLab CI/CD;
-- сохранять отчёты как artifacts;
-- провести анализ найденных проблем и ложных срабатываний.
+Для SAST используются два взаимодополняющих инструмента:
 
-Цель — покрыть проверками весь применимый исходный код проекта.
+- **Bandit** — специализированный анализатор безопасности Python-кода, предназначенный для поиска потенциально небезопасных конструкций и типовых security-проблем Python;
+- **Semgrep** — rule-based SAST-анализатор с более широким набором правил, позволяющий проверять Python/Django и web-паттерны.
+
+Bandit устанавливается из отдельного `requirements-security.txt`, чтобы security tooling не смешивался с runtime-зависимостями приложения. Semgrep запускается в отдельном контейнерном образе.
+
+#### Реализация в GitLab CI/CD
+
+Добавлены два CI job:
+
+```text
+sast:bandit
+sast:semgrep
+```
+
+Оба назначены выделенному SAST runner через теги:
+
+```text
+thrdlabapp, security, sast
+```
+
+После успешного `test` pipeline разрешает независимый запуск трёх ветвей:
+
+```text
+                         +--> sast:bandit -----> bandit-report.json
+                         |
+test --------------------+--> sast:semgrep ----> semgrep-report.json
+                         |
+                         +--> build:image ------> Docker Hub
+```
+
+Для jobs используются `needs: [test]`, поэтому SAST и сборка не обязаны последовательно ждать друг друга по stage barrier и могут выполняться параллельно при наличии свободных runner slots.
+
+Результаты обоих анализаторов сохраняются в GitLab CI как artifacts сроком на одну неделю:
+
+```text
+bandit-report.json
+semgrep-report.json
+```
+
+Это выполняет требование дипломного задания по выгрузке и сохранению результатов статического анализа.
+
+#### Текущая политика обработки findings
+
+На этапе первичного внедрения SAST найденные проблемы **не блокируют release**. Цель Этапа 2 — обеспечить воспроизводимый автоматический анализ, получить baseline, классифицировать findings и отделить подтверждённые проблемы от false positives.
+
+Bandit возвращает ненулевой exit code при обнаружении findings. Первый запуск подтвердил корректную работу сканера: анализ был завершён, `bandit-report.json` успешно сформирован и загружен в GitLab artifacts, после чего Bandit завершился с `exit code 1` из-за найденных проблем. Для текущего report-only режима команда выполняется как:
+
+```bash
+bandit -r . -f json -o bandit-report.json || true
+```
+
+Таким образом, наличие findings не маскируется — полный отчёт сохраняется для анализа, — но сам SAST job не останавливает pipeline на этапе формирования baseline.
+
+Semgrep работает по тому же принципу: результаты сохраняются в `semgrep-report.json`; до реализации Security Gateway SAST jobs являются информационными и используются для накопления и анализа результатов.
+
+На **Этапе 5 (Security Gateway)** политика будет изменена: результаты SAST вместе с другими security checks будут автоматически оцениваться по severity, и наличие недопустимых уязвимостей сможет блокировать deployment.
+
+#### Инфраструктура SAST
+
+Для параллельной работы CI на `DEM-PC1064` настроены отдельные регистрации runner-ов и `concurrent = 3`. Build и SAST распределяются по специализированным runner-ам тегами. Это позволяет выполнять ресурсоёмкую сборку и статический анализ независимо друг от друга и не требует запуска security tooling на целевом VPS.
+
+Текущий статус этапа:
+
+- Bandit интегрирован в GitLab CI/CD;
+- Semgrep интегрирован в GitLab CI/CD;
+- SAST запускается автоматически после pytest;
+- отчёты сохраняются как CI artifacts;
+- Bandit уже подтвердил обнаружение findings и формирование JSON-отчёта;
+- включён report-only режим до формирования baseline;
+- следующий шаг — разобрать `bandit-report.json` и `semgrep-report.json`, классифицировать результаты и зафиксировать false positives/подтверждённые проблемы.
 
 ### Этап 3. DAST
 
@@ -320,17 +376,14 @@ source code
 Целевой pipeline:
 
 ```text
-                         +--> SAST -----------+
-                         |                    |
-commit --> lint --> tests+--> Secret Scan ----+--> Security Gateway --> Build --> Docker Hub --> Deploy
-                         |                    |
-                         +--> SCA ------------+
-                                              |
-Docker image ----------------> Image Scan ----+
-                                              |
-                                              +--> block release
-                                              +--> report
-                                              +--> MR feedback
+commit --> lint --> tests
+                    |
+                    +--> SAST -----------+
+                    +--> Secret Scan ----+----> Security Gateway ----> Deploy
+                    +--> SCA ------------+             |
+                    |                                  +--> block release
+                    `--> Build --> Image Scan ----------+--> report
+                                                       `--> MR feedback
 ```
 
 ### Этап 6. Анализ результатов и итоговая документация
@@ -348,17 +401,17 @@ Docker image ----------------> Image Scan ----+
 
 ---
 
-## Планируемые инструменты
+## Планируемые и используемые инструменты
 
 | Задача | Инструмент |
 |---|---|
 | Source / documentation | GitHub |
 | CI/CD | GitLab CI/CD |
-| CI runner | Self-hosted GitLab Runner / WSL / Docker executor |
+| CI runners | Self-hosted GitLab Runner / WSL / Docker executor |
 | Deployment runner | GitLab-hosted Runner |
 | Container registry | Docker Hub |
 | Containerization | Docker / Docker Compose |
-| Future orchestration | Kubernetes (при необходимости) |
+| Functional tests | pytest, Selenium, Chromium |
 | Web application | Django / Gunicorn |
 | Database | PostgreSQL |
 | SAST | Semgrep, Bandit |
@@ -396,11 +449,11 @@ Docker image ----------------> Image Scan ----+
 | Этап | Статус |
 |---|---|
 | 0. Подготовка стенда | Выполнен |
-| 1. CI/CD | Базовый pipeline и deployment выполнены |
-| 2. SAST | Не начат |
+| 1. CI/CD | Выполнен: lint, pytest, build и deployment |
+| 2. SAST | В работе: Bandit и Semgrep интегрированы, формируется baseline |
 | 3. DAST | Не начат |
 | 4. Security Checks | Не начат |
 | 5. Security Gateway | Не начат |
 | 6. Итоговая документация | Не начат |
 
-README будет обновляться по мере прохождения этапов дипломной работы.
+README обновляется по мере прохождения этапов дипломной работы.
