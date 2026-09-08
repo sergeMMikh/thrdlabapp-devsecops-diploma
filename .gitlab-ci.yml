@@ -2,6 +2,7 @@ stages:
   - validate
   - auth
   - lint
+  - test
   - build
   - deploy
 
@@ -62,6 +63,25 @@ lint:
 
   script:
     - python -m flake8 .
+
+test:
+  stage: test
+  image: python:3.10-slim
+
+  before_script:
+    - python --version
+    - pip install --no-cache-dir -r requirements.txt
+
+  script:
+    - python -m pytest -q --junitxml=pytest-report.xml
+
+  artifacts:
+    when: always
+    reports:
+      junit: pytest-report.xml
+    paths:
+      - pytest-report.xml
+    expire_in: 1 week
 
 build:image:
   stage: build
