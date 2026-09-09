@@ -102,6 +102,12 @@ SAST: Bandit         SAST: Semgrep          build:image
                           |
                           v
                        deploy
+                          |
+                          v
+                security:check-connection
+                          |
+                          v
+                security:zap-baseline
 ```
 
 Docker-образ публикуется с тегом, соответствующим commit SHA. Это обеспечивает трассируемость:
@@ -156,26 +162,12 @@ SAST runner
 
 DAST runner
   tags: thrdlabapp, security, dast
-  jobs: OWASP ZAP (следующий этап)
+  jobs: HTTPS availability check, OWASP ZAP Baseline Scan
 ```
 
 Build runner использует `privileged = true`, необходимый для Docker-in-Docker. Security runners работают без privileged mode, если конкретная проверка не требует обратного.
 
-Дополнительно существуют резервные runners на другом хосте, однако обязательные стадии основного pipeline на них не завязаны, поскольку этот хост доступен не постоянно.
-
-При настройке CD было выявлено сетевое ограничение: сеть, в которой работает основной self-hosted WSL runner, блокирует исходящие подключения к SSH-порту целевого VPS. Поэтому SSH authentication и deployment выполняются GitLab-hosted runner-ом, имеющим сетевой доступ к целевому серверу.
-
-Такое разделение является следствием сетевого ограничения, а не способом обхода security checks. Deploy остаётся отдельной финальной стадией pipeline и выполняется только после завершения зависимых CI/security-задач.
-
-С точки зрения безопасности CI/CD соблюдаются следующие условия:
-
-- deployment job не выполняет повторную сборку приложения;
-- на VPS доставляется именно образ, созданный предыдущей стадией pipeline;
-- образ идентифицируется тегом на основе commit SHA;
-- секреты Docker Hub и SSH хранятся в защищённых GitLab CI/CD variables и не находятся в репозитории;
-- deployment выполняется по SSH с ключевой аутентификацией;
-- целевой сервер не используется как CI/build runner;
-- будущий Security Gateway располагается до deployment.
+При настройке CD было выявлено сетевое ограничение: сеть, в которой работает основной self-hosted WSL runner, блокирует исходящие подключения к SSH-порту целевого VPS. Поэтому SSH authentication и deployment выполняются GitLab-hosted runner-ом, имеющим сетевой доступ к целевому серверу. DAST выполняется с self-hosted DAST runner через стандартный HTTPS-порт 443.
 
 #### Разделение ответственности
 
@@ -184,7 +176,7 @@ GitHub                 — основной репозиторий проект�
 GitLab                 — CI/CD pipeline
 DEM-PC1064 Build       — lint, pytest, Docker build/push
 DEM-PC1064 SAST        — Bandit, Semgrep
-DEM-PC1064 DAST        — OWASP ZAP (следующий этап)
+DEM-PC1064 DAST        — HTTPS pre-check, OWASP ZAP
 GitLab-hosted Runner   — deployment transport до VPS
 Docker Hub             — registry готовых Docker-образов
 VPS                    — целевая среда развёртывания
@@ -220,8 +212,8 @@ VPS                    — целевая среда развёртывания
 
 Для SAST используются два взаимодополняющих инструмента:
 
-- **Bandit** — специализированный анализатор безопасности Python-кода, предназначенный для поиска потенциально небезопасных конструкций и типовых security-проблем Python;
-- **Semgrep** — rule-based SAST-анализатор с более широким набором правил, позволяющий проверять Python/Django и web-паттерны.
+- **Bandit** — специализированный анализатор безопасности Python-кода;
+- **Semgrep** — rule-based SAST-анализатор с более широким набором правил для Python/Django и web-паттернов.
 
 Bandit устанавливается из отдельного `requirements-security.txt`, чтобы security tooling не смешивался с runtime-зависимостями приложения. Semgrep запускается в отдельном контейнерном образе.
 
@@ -234,11 +226,7 @@ sast:bandit
 sast:semgrep
 ```
 
-Оба назначены выделенному SAST runner через теги:
-
-```text
-thrdlabapp, security, sast
-```
+Оба назначены выделенному SAST runner через теги `thrdlabapp, security, sast`.
 
 После успешного `test` pipeline разрешает независимый запуск трёх ветвей:
 
@@ -250,36 +238,16 @@ test --------------------+--> sast:semgrep ----> semgrep-report.json
                          +--> build:image ------> Docker Hub
 ```
 
-Для jobs используются `needs: [test]`, поэтому SAST и сборка не обязаны последовательно ждать друг друга по stage barrier и могут выполняться параллельно при наличии свободных runner slots.
+Для jobs используются `needs: [test]`, поэтому SAST и сборка могут выполняться параллельно при наличии свободных runner slots.
 
-Результаты обоих анализаторов сохраняются в GitLab CI как artifacts сроком на одну неделю:
+Результаты анализаторов сохраняются в GitLab CI как artifacts сроком на одну неделю:
 
 ```text
 bandit-report.json
 semgrep-report.json
 ```
 
-Это выполняет требование дипломного задания по выгрузке и сохранению результатов статического анализа.
-
-#### Текущая политика обработки findings
-
-На этапе первичного внедрения SAST найденные проблемы **не блокируют release**. Цель Этапа 2 — обеспечить воспроизводимый автоматический анализ, получить baseline, классифицировать findings и отделить подтверждённые проблемы от false positives.
-
-Bandit возвращает ненулевой exit code при обнаружении findings. Первый запуск подтвердил корректную работу сканера: анализ был завершён, `bandit-report.json` успешно сформирован и загружен в GitLab artifacts, после чего Bandit завершился с `exit code 1` из-за найденных проблем. Для текущего report-only режима команда выполняется как:
-
-```bash
-bandit -r . -f json -o bandit-report.json || true
-```
-
-Таким образом, наличие findings не маскируется — полный отчёт сохраняется для анализа, — но сам SAST job не останавливает pipeline на этапе формирования baseline.
-
-Semgrep работает по тому же принципу: результаты сохраняются в `semgrep-report.json`; до реализации Security Gateway SAST jobs являются информационными и используются для накопления и анализа результатов.
-
-На **Этапе 5 (Security Gateway)** политика будет изменена: результаты SAST вместе с другими security checks будут автоматически оцениваться по severity, и наличие недопустимых уязвимостей сможет блокировать deployment.
-
-#### Инфраструктура SAST
-
-Для параллельной работы CI на `DEM-PC1064` настроены отдельные регистрации runner-ов и `concurrent = 3`. Build и SAST распределяются по специализированным runner-ам тегами. Это позволяет выполнять ресурсоёмкую сборку и статический анализ независимо друг от друга и не требует запуска security tooling на целевом VPS.
+На этапе первичного внедрения SAST найденные проблемы **не блокируют release**. Цель Этапа 2 — обеспечить воспроизводимый автоматический анализ, получить baseline, классифицировать findings и отделить подтверждённые проблемы от false positives. На Этапе 5 (Security Gateway) результаты SAST вместе с другими security checks будут оцениваться по severity и смогут блокировать release.
 
 Текущий статус этапа:
 
@@ -287,9 +255,7 @@ Semgrep работает по тому же принципу: результат
 - Semgrep интегрирован в GitLab CI/CD;
 - SAST запускается автоматически после pytest;
 - отчёты сохраняются как CI artifacts;
-- Bandit уже подтвердил обнаружение findings и формирование JSON-отчёта;
-- включён report-only режим до формирования baseline;
-- следующий шаг — разобрать `bandit-report.json` и `semgrep-report.json`, классифицировать результаты и зафиксировать false positives/подтверждённые проблемы.
+- включён report-only режим до формирования baseline.
 
 ### Этап 3. DAST
 
@@ -299,32 +265,104 @@ Semgrep работает по тому же принципу: результат
 2. успешный запуск доступных методов сканирования;
 3. выгрузка результатов в CI или систему управления уязвимостями.
 
-План реализации:
+#### HTTPS endpoint для динамического анализа
 
-- выполнять DAST против развернутого приложения на учебном стенде;
-- использовать OWASP ZAP;
-- выполнить baseline scan;
-- при необходимости добавить authenticated/API scan;
-- сохранять HTML/JSON/XML отчёты как CI artifacts;
-- разобрать обнаруженные уязвимости и false positive результаты.
+Для DAST приложение опубликовано через отдельное DNS-имя **`diploma.smmikh.pt`** и доступно по HTTPS на стандартном порту 443.
 
-Целевая схема:
+На учебном VPS перед Django/Gunicorn установлен **Nginx**, выполняющий роль reverse proxy:
 
 ```text
-GitLab CI/CD
-      |
-      v
-   deploy
-      |
-      v
-training VPS
-      |
-      v
-  OWASP ZAP
-      |
-      v
-DAST report
+Internet / DAST runner
+        |
+     HTTPS :443
+        |
+        v
+      Nginx
+        |
+        v
+  Django / Gunicorn :8000
+        |
+        v
+    PostgreSQL
 ```
+
+Gunicorn не используется как публичная HTTPS-точка входа. Внешний доступ к порту 8000 закрыт UFW; наружу для web-приложения открыты стандартные порты 80/443. Порт 80 используется для HTTP/ACME и перенаправления на HTTPS, а рабочая точка доступа приложения и DAST — HTTPS/443.
+
+TLS-сертификат для `diploma.smmikh.pt` выпущен **Let's Encrypt** и установлен в Nginx. Проверены корректная TLS-цепочка и автоматическое продление сертификата с помощью `certbot renew --dry-run`. Это позволяет DAST runner и OWASP ZAP обращаться к стенду по обычному доверенному HTTPS без отключения проверки сертификата и без добавления self-signed CA.
+
+#### Реализация DAST в GitLab CI/CD
+
+Для динамического анализа используется **OWASP ZAP Baseline Scan**. Проверка выполняется выделенным runner `DEM-PC1064-3` с тегами:
+
+```text
+thrdlabapp, security, dast
+```
+
+После deployment выполняются две последовательные стадии:
+
+```text
+deploy:production
+       |
+       v
+security:check-connection
+       |
+       v
+security:zap-baseline
+       |
+       +--> zap-report.json
+       +--> zap-report.html
+       `--> zap-report.md
+```
+
+`security:check-connection` выполняет быстрый HTTPS pre-check через `curl`. Если приложение недоступно, динамический анализ не запускается. Это позволяет отличить сетевую/инфраструктурную ошибку от результата security scanner.
+
+После успешной проверки доступности `security:zap-baseline` запускает официальный контейнер OWASP ZAP и выполняет passive/baseline анализ развернутого приложения. Отчёты сохраняются в GitLab CI artifacts сроком на одну неделю в трёх форматах:
+
+```text
+zap-report.json
+zap-report.html
+zap-report.md
+```
+
+На текущем этапе ZAP работает в **report-only** режиме: findings сохраняются и анализируются, но сами предупреждения ещё не блокируют release. Политика блокировки будет реализована на Этапе 5 (Security Gateway).
+
+#### Результат baseline scan
+
+Первый успешный baseline scan обработал **29 URL** приложения. Итог ZAP:
+
+```text
+FAIL-NEW: 0
+WARN-NEW: 12
+PASS: 55
+```
+
+Критических результатов уровня `FAIL` baseline scan не выявил. При этом сформирован baseline из 12 типов предупреждений, среди которых:
+
+- cookie без `HttpOnly`;
+- cookie без `Secure`;
+- отсутствие HSTS (`Strict-Transport-Security`);
+- отсутствие Content Security Policy (CSP);
+- отсутствие Permissions Policy;
+- потенциально управляемые HTML-атрибуты (Potential XSS);
+- замечания к cache-control/cacheable content;
+- Cross-Domain Misconfiguration;
+- отсутствие Subresource Integrity для части ресурсов;
+- дополнительные browser isolation/security headers.
+
+Эти результаты не считаются автоматически подтверждёнными уязвимостями: на следующих этапах findings будут классифицированы, проверены на false positives и сопоставлены с допустимым уровнем риска.
+
+#### Результат этапа
+
+- развернутое приложение доступно DAST runner по доверенному HTTPS;
+- настроены Nginx reverse proxy и сертификат Let's Encrypt;
+- внешний порт приложения 8000 закрыт, DAST выполняется через HTTPS/443;
+- реализован отдельный pre-check доступности приложения;
+- OWASP ZAP Baseline Scan интегрирован в GitLab CI/CD;
+- DAST выполняется автоматически после deployment;
+- baseline scan успешно обработал 29 URL;
+- результаты DAST сохраняются как JSON/HTML/Markdown artifacts;
+- получен baseline: `0 FAIL`, `12 WARN`, `55 PASS`;
+- pipeline с Этапом 3 успешно завершён.
 
 ### Этап 4. Security Checks
 
@@ -411,6 +449,7 @@ commit --> lint --> tests
 | Deployment runner | GitLab-hosted Runner |
 | Container registry | Docker Hub |
 | Containerization | Docker / Docker Compose |
+| Reverse proxy / HTTPS | Nginx / Let's Encrypt / Certbot |
 | Functional tests | pytest, Selenium, Chromium |
 | Web application | Django / Gunicorn |
 | Database | PostgreSQL |
@@ -450,8 +489,8 @@ commit --> lint --> tests
 |---|---|
 | 0. Подготовка стенда | Выполнен |
 | 1. CI/CD | Выполнен: lint, pytest, build и deployment |
-| 2. SAST | В работе: Bandit и Semgrep интегрированы, формируется baseline |
-| 3. DAST | Не начат |
+| 2. SAST | Выполнен: Bandit и Semgrep интегрированы, отчёты сохраняются в CI |
+| 3. DAST | Выполнен: HTTPS endpoint, pre-check и OWASP ZAP Baseline Scan интегрированы |
 | 4. Security Checks | Не начат |
 | 5. Security Gateway | Не начат |
 | 6. Итоговая документация | Не начат |
