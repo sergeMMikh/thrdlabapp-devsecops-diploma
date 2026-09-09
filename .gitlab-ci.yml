@@ -6,6 +6,7 @@ stages:
   - sast
   - build
   - deploy
+  - dast-check
   - dast
 
 validate:variables:
@@ -34,9 +35,7 @@ auth:dockerhub:
   image: docker:27-cli
 
   script:
-    - echo "$DOCKERHUB_TOKEN" | docker login
-      --username "$DOCKERHUB_USERNAME"
-      --password-stdin
+    - echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
     - echo "Docker Hub authentication successful"
     - docker logout
 
@@ -167,18 +166,13 @@ build:image:
     DOCKER_TLS_CERTDIR: ""
 
   before_script:
-    - echo "$DOCKERHUB_TOKEN" | docker login
-      --username "$DOCKERHUB_USERNAME"
-      --password-stdin
+    - echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
   script:
     - IMAGE="$DOCKERHUB_USERNAME/thrdlabapp-devsecops-diploma"
     - TAG="$CI_COMMIT_SHORT_SHA"
     - echo "Building Docker image with tag $TAG"
-    - docker build
-      -t "$IMAGE:$TAG"
-      -t "$IMAGE:latest"
-      .
+    - docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
     - docker push "$IMAGE:$TAG"
     - docker push "$IMAGE:latest"
     - echo "Docker image published successfully"
@@ -221,7 +215,7 @@ deploy:production:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 dast:check-connection:
-  stage: dast
+  stage: dast-check
   tags:
     - thrdlabapp
     - security
@@ -232,17 +226,7 @@ dast:check-connection:
 
   script:
     - 'echo "Checking DAST target availability..."'
-    - >
-      curl
-      --fail
-      --show-error
-      --silent
-      --location
-      --retry 3
-      --retry-delay 5
-      --connect-timeout 10
-      https://diploma.smmikh.pt/
-      --output /dev/null
+    - 'curl --fail --show-error --silent --location --retry 3 --retry-delay 5 --connect-timeout 10 https://diploma.smmikh.pt/ --output /dev/null'
     - 'echo "DAST target is available over HTTPS"'
 
 dast:zap-baseline:
@@ -257,13 +241,7 @@ dast:zap-baseline:
 
   script:
     - mkdir -p /zap/wrk
-    - >
-      zap-baseline.py
-      -t https://diploma.smmikh.pt
-      -J /zap/wrk/zap-report.json
-      -r /zap/wrk/zap-report.html
-      -w /zap/wrk/zap-report.md
-      || true
+    - 'zap-baseline.py -t https://diploma.smmikh.pt -J /zap/wrk/zap-report.json -r /zap/wrk/zap-report.html -w /zap/wrk/zap-report.md || true'
     - cp /zap/wrk/zap-report.* .
 
   artifacts:
