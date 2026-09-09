@@ -174,17 +174,13 @@ build:image:
   script:
     - IMAGE="$DOCKERHUB_USERNAME/thrdlabapp-devsecops-diploma"
     - TAG="$CI_COMMIT_SHORT_SHA"
-
     - echo "Building Docker image with tag $TAG"
-
     - docker build
       -t "$IMAGE:$TAG"
       -t "$IMAGE:latest"
       .
-
     - docker push "$IMAGE:$TAG"
     - docker push "$IMAGE:latest"
-
     - echo "Docker image published successfully"
 
   after_script:
@@ -223,6 +219,7 @@ deploy:production:
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+
 dast:check-connection:
   stage: dast
   tags:
@@ -234,8 +231,9 @@ dast:check-connection:
     - deploy:production
 
   script:
-    - echo "Checking DAST target availability..."
-    - curl
+    - 'echo "Checking DAST target availability..."'
+    - >
+      curl
       --fail
       --show-error
       --silent
@@ -245,7 +243,7 @@ dast:check-connection:
       --connect-timeout 10
       https://diploma.smmikh.pt/
       --output /dev/null
-    - echo "DAST target is available over HTTPS"
+    - 'echo "DAST target is available over HTTPS"'
 
 dast:zap-baseline:
   stage: dast
@@ -255,11 +253,12 @@ dast:zap-baseline:
     - dast
   image: ghcr.io/zaproxy/zaproxy:stable
   needs:
-    - deploy:production
+    - dast:check-connection
 
   script:
     - mkdir -p /zap/wrk
-    - zap-baseline.py
+    - >
+      zap-baseline.py
       -t https://diploma.smmikh.pt
       -J /zap/wrk/zap-report.json
       -r /zap/wrk/zap-report.html
