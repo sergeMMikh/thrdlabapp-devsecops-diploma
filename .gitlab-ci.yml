@@ -6,6 +6,7 @@ stages:
   - sast
   - build
   - deploy
+  - dast
 
 validate:variables:
   stage: validate
@@ -222,3 +223,56 @@ deploy:production:
 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+dast:check-connection:
+  stage: dast
+  tags:
+    - thrdlabapp
+    - security
+    - dast
+  image: curlimages/curl:latest
+  needs:
+    - deploy:production
+
+  script:
+    - echo "Checking DAST target availability..."
+    - curl
+      --fail
+      --show-error
+      --silent
+      --location
+      --retry 3
+      --retry-delay 5
+      --connect-timeout 10
+      https://diploma.smmikh.pt/
+      --output /dev/null
+    - echo "DAST target is available over HTTPS"
+
+dast:zap-baseline:
+  stage: dast
+  tags:
+    - thrdlabapp
+    - security
+    - dast
+  image: ghcr.io/zaproxy/zaproxy:stable
+  needs:
+    - deploy:production
+
+  script:
+    - mkdir -p /zap/wrk
+    - zap-baseline.py
+      -t https://diploma.smmikh.pt
+      -J /zap/wrk/zap-report.json
+      -r /zap/wrk/zap-report.html
+      -w /zap/wrk/zap-report.md
+      || true
+    - cp /zap/wrk/zap-report.* .
+
+  artifacts:
+    when: always
+    paths:
+      - zap-report.json
+      - zap-report.html
+      - zap-report.md
+    expire_in: 1 week
+
+  allow_failure: true
