@@ -530,9 +530,65 @@ security:gateway:
           if counts["CRITICAL"] or counts["HIGH"]:
               blockers.append(f"{name}: CRITICAL={counts['CRITICAL']}, HIGH={counts['HIGH']}")
 
+      status = "BLOCKED" if blockers else "PASSED"
+      recommendations = []
+      if verified:
+          recommendations.append("Revoke detected secrets, remove them from Git history and rotate affected credentials.")
+      if bandit_high:
+          recommendations.append("Review and remediate HIGH severity Bandit findings.")
+      if audit_vulns:
+          recommendations.append("Review pip-audit findings and upgrade affected Python dependencies to fixed versions.")
+      if fs["CRITICAL"] or fs["HIGH"]:
+          recommendations.append("Remediate CRITICAL/HIGH filesystem findings reported by Trivy.")
+      if image["CRITICAL"] or image["HIGH"]:
+          recommendations.append("Update application/base-image packages responsible for CRITICAL/HIGH Trivy image findings.")
+      if not recommendations:
+          recommendations.append("No blocking findings detected.")
+
       print("=== SECURITY GATEWAY SUMMARY ===")
       for line in summary:
           print(line)
+
+      report = [
+          "# Security Gateway Report",
+          "",
+          f"Status: **{status}**",
+          "",
+          "## Summary",
+          "",
+          *[f"- {line}" for line in summary],
+          "",
+          "## Blocking policy",
+          "",
+          "- Verified secrets: BLOCK",
+          "- Bandit HIGH: BLOCK",
+          "- Trivy CRITICAL/HIGH: BLOCK",
+          "- pip-audit findings: report-only",
+          "- Medium/Low findings: report-only",
+          "",
+          "## Blockers",
+          "",
+          *([f"- {item}" for item in blockers] if blockers else ["- None"]),
+          "",
+          "## Recommendations",
+          "",
+          *[f"- {item}" for item in recommendations],
+          "",
+          f"Pipeline: {__import__('os').environ.get('CI_PIPELINE_URL', '')}",
+          f"Commit: {__import__('os').environ.get('CI_COMMIT_SHA', '')}",
+      ]
+      pathlib.Path("security-gateway-report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+
+      machine = {
+          "status": status,
+          "summary": summary,
+          "blockers": blockers,
+          "recommendations": recommendations,
+      }
+      pathlib.Path("security-gateway-report.json").write_text(
+          json.dumps(machine, indent=2, ensure_ascii=False) + "\n",
+          encoding="utf-8",
+      )
 
       if blockers:
           print("\nRELEASE BLOCKED")
@@ -542,6 +598,20 @@ security:gateway:
 
       print("\nSECURITY GATEWAY PASSED")
       PY
+
+  artifacts:
+    when: always
+    paths:
+      - security-gateway-report.md
+      - security-gateway-report.json
+      - bandit-report.json
+      - semgrep-report.json
+      - trufflehog-report.json
+      - pip-audit-report.json
+      - trivy-fs-report.json
+      - trivy-config-report.json
+      - trivy-image-report.json
+    expire_in: 1 week
 
 deploy:production:
   rules:
