@@ -112,7 +112,7 @@ test:
     - thrdlabapp
     - docker
     - build
-  image: python:3.10-slim
+  image: python:3.12-slim
 
   before_script:
     - apt-get update
@@ -296,7 +296,7 @@ build:image:
     - IMAGE="$DOCKERHUB_USERNAME/thrdlabapp-devsecops-diploma"
     - TAG="$CI_COMMIT_SHORT_SHA"
     - echo "Building Docker image with tag $TAG"
-    - docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
+    - docker build --pull -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
     - docker push "$IMAGE:$TAG"
     - docker push "$IMAGE:latest"
     - echo "Docker image published successfully"

@@ -25,7 +25,7 @@ class UserSerializer(ModelSerializer):
         model = User
         fields = ('id', 'first_name', 'last_name', 'email',
                   'email_is_verified')
-        read_only_fields = ('id',)
+        read_only_fields = ('id', 'email_is_verified')
         extra_kwargs = {
             'first_name': {
                 'error_messages': {

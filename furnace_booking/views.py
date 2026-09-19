@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from urllib.parse import urlencode
 from itertools import groupby
 from django.http import JsonResponse
+from django.utils.http import url_has_allowed_host_and_scheme
 from .models import Furnace, BookingOfFurnace, Equipment, BookingOfEquipment
 from .forms import FurnaceBookingForm, EquipmentBookingForm
 
@@ -63,7 +64,7 @@ def equipment_booking_view(request):
         form = EquipmentBookingForm(request.POST)
         if form.is_valid():
             data = form.cleaned_data
-            action = request.POST.get('action', 'book')
+            action = data.get('action') or 'book'
             try:
                 with transaction.atomic():
                     BookingOfEquipment.objects.create(
@@ -114,7 +115,7 @@ def furnace_booking_view(request):
         form = FurnaceBookingForm(request.POST)
         if form.is_valid():
             data = form.cleaned_data
-            action = request.POST.get('action', 'book')
+            action = data.get('action') or 'book'
             try:
                 with transaction.atomic():
                     BookingOfFurnace.objects.create(
@@ -280,7 +281,10 @@ def delete_furnace_booking_view(request):
             booking = BookingOfFurnace.objects.filter(id=booking_id).first()
             if booking and booking.date >= date.today():
                 booking.delete()
-        if next_url:
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
             return redirect(next_url)
         if furnace_name:
             furnace_query = urlencode({'furnace': furnace_name})
@@ -297,7 +301,10 @@ def delete_equipment_booking_view(request):
             booking = BookingOfEquipment.objects.filter(id=booking_id).first()
             if booking and booking.date >= date.today():
                 booking.delete()
-        if next_url:
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
             return redirect(next_url)
         if equipment_name:
             return redirect(

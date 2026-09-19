@@ -5,7 +5,15 @@ from .models import Furnace, Equipment
 from users.models import Person
 
 
-class FurnaceBookingForm(forms.Form):
+class BookingActionForm(forms.Form):
+    action = forms.ChoiceField(
+        choices=(('book', 'Book'), ('book_and_next', 'Book and next')),
+        required=False,
+        widget=forms.HiddenInput,
+    )
+
+
+class FurnaceBookingForm(BookingActionForm):
     person = forms.ModelChoiceField(
         queryset=Person.objects.all().order_by('first_name', 'surname'),
         label='Person',
@@ -40,7 +48,7 @@ class FurnaceBookingForm(forms.Form):
         return booking_date
 
 
-class EquipmentBookingForm(forms.Form):
+class EquipmentBookingForm(BookingActionForm):
     person = forms.ModelChoiceField(
         queryset=Person.objects.all().order_by('first_name', 'surname'),
         label='Person',

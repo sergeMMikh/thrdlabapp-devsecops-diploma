@@ -35,7 +35,8 @@ class UserManager(BaseUserManager):
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
 
-        user.set_password(password)
+        # Model managers accept trusted callers; public entrypoints validate.
+        user.set_password(password)  # nosemgrep: unvalidated-password
         user.save(using=self._db)
         return user
 

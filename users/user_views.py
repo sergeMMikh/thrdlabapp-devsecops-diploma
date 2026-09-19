@@ -103,6 +103,8 @@ class RegisterAccount(APIView):
                 if user_serializer.is_valid():
                     # сохраняем пользователя
                     user = user_serializer.save()
+                    # Legacy view validates above; the rule misses try/else.
+                    # nosemgrep: unvalidated-password
                     user.set_password(request.data['password'])
                     user.save()
                     # verification of email

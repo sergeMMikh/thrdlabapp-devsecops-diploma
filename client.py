@@ -12,7 +12,7 @@ request = requests.post(f'{url}user/register',
                             "last_name": "magaz7",
                             "email": "student@mail.ru",
                             "password": "qwer2345",
-                        })
+                        }, timeout=10)
 if request.status_code == 200:
     data_str = request.json()
     print("request:")
@@ -26,6 +26,7 @@ request = requests.post(f'{url}user/login',
                             "email": "student@mail.ru",
                             "password": "qwer2345",
                         },
+                        timeout=10,
                         )
 if request.status_code == 200:
     data_str = request.json()
@@ -38,5 +39,4 @@ else:
 
     print(f'request: {request.status_code}')
     data_str = request.raw
-
 

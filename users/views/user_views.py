@@ -80,40 +80,32 @@ class RegisterAccount(APIView):
             'password',
         }.issubset(request.data):
 
-            # check password
+            user_serializer = UserSerializer(data=request.data)
+            if not user_serializer.is_valid():
+                return JsonResponse({
+                    'Status': False,
+                    'Errors': user_serializer.errors,
+                })
+
+            # Validate against the user's attributes before writing any record.
+            user = User(**user_serializer.validated_data)
+            password = request.data['password']
             try:
-                validate_password(request.data['password'])
-            except Exception as password_error:
-                error_array = []
-                # noinspection PyTypeChecker
-                for item in password_error:
-                    error_array.append(item)
+                validate_password(password, user=user)
+            except ValidationError as password_error:
                 return JsonResponse(
                     {'Status': False,
-                     'Errors': {'password': error_array}},
-                    status=status.HTTP_400_BAD_REQUEST)
-            else:
-                # check if data are unique
-                request.data.update({})
-                user_serializer = UserSerializer(data=request.data)
-                if user_serializer.is_valid():
-                    # save user
-                    user = user_serializer.save()
-                    user.set_password(request.data['password'])
-                    user.save()
-                    # verification of email
-                    Token.objects.get_or_create(user=user)
-
-                    return JsonResponse(
-                        {'Status': True,
-                         'Message':
-                             'Check your email to complete registration.'},
-                        status=status.HTTP_201_CREATED)
-                else:
-                    return JsonResponse(
-                        {'Status': False,
-                         'Errors': user_serializer.errors},
-                    )
+                     'Errors': {'password': password_error.messages}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.set_password(password)
+            user.save()
+            Token.objects.get_or_create(user=user)
+            return JsonResponse(
+                {'Status': True,
+                 'Message': 'Check your email to complete registration.'},
+                status=status.HTTP_201_CREATED,
+            )
 
         return JsonResponse(
             {'Status': False,
@@ -173,19 +165,12 @@ class UserEmailVerify(APIView):
         user_id = get_object_or_404(Token.objects.all(), key=token).user_id
         user = get_object_or_404(User.objects.all(), pk=user_id)
 
-        serializer = UserSerializer(instance=user,
-                                    data={'email_is_verified': True,
-                                          'is_active': True},
-                                    partial=True)
-
-        if serializer.is_valid():
-            serializer.save()
-            return Response({'User': user.email,
-                             'Message': 'Yor registration is confirmed.'},
-                            status=status.HTTP_200_OK)
-
-        return Response(serializer.errors,
-                        status=status.HTTP_400_BAD_REQUEST)
+        # Email verification must not reactivate a disabled account.
+        user.email_is_verified = True
+        user.save(update_fields=['email_is_verified'])
+        return Response({'User': user.email,
+                         'Message': 'Your registration is confirmed.'},
+                        status=status.HTTP_200_OK)
 
 
 class EditUser(APIView):
