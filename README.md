@@ -471,6 +471,19 @@ Production deployment разрешён только из ветки `main`. Secu
 
 Для Merge Request выполняется расширенный набор source-level security checks и автоматически публикуется Security Summary с рекомендациями через GitLab API. Сборка и публикация production Docker image остаются только в доверенном pipeline ветки `main`, чтобы registry credentials не передавались коду из произвольной рабочей ветки.
 
+
+#### Проверка блокировки релиза и исправление уязвимостей
+
+При первом интеграционном запуске Security Gateway контейнерный и filesystem-анализ Trivy обнаружил недопустимые findings уровня HIGH/CRITICAL. Job `security:gateway` завершился с ошибкой, а зависимые стадии `deploy:production`, `security:check-connection` и `security:zap-baseline` не были запущены. Это подтверждает, что release gate фактически останавливает доставку небезопасного релиза до production.
+
+![Security Gateway blocked release](Error_on_stage5.png)
+
+В отчёте Gateway были зафиксированы, в частности, уязвимости устаревшей зависимости `Django==4.0.4`. В качестве remediation выполнен переход на поддерживаемую LTS-ветку Django 5.2 с сохранением совместимости с используемым в CI Python 3.10.
+
+Во время remediation была также выявлена ошибка управления версиями: первоначально была указана ещё не опубликованная версия `Django==5.2.18`. `pip install -r requirements.txt` корректно остановил pipeline сообщением `No matching distribution found for Django==5.2.18`; доступной версией в используемом package index была `5.2.17`. Зависимость скорректирована до `Django==5.2.17`, после чего pipeline должен повторно выполнить функциональные и security-проверки до разрешения deployment.
+
+Таким образом, Stage 5 демонстрирует полный цикл: **обнаружение → блокировка релиза → анализ причины → remediation → повторная проверка**.
+
 ### Этап 6. Анализ результатов и итоговая документация
 
 После реализации pipeline необходимо:
