@@ -184,7 +184,6 @@ security:trufflehog:
   tags:
     - thrdlabapp
     - security
-    - sast
   image:
     name: ghcr.io/trufflesecurity/trufflehog:latest
     entrypoint: [""]
