@@ -1,3 +1,9 @@
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "stage_4"'
+    - when: never
+
 stages:
   - validate
   - auth
@@ -11,6 +17,9 @@ stages:
   - security-scan
 
 validate:variables:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: validate
   tags:
     - thrdlabapp
@@ -28,6 +37,9 @@ validate:variables:
     - echo "All required CI/CD variables are available"
 
 auth:dockerhub:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: auth
   tags:
     - thrdlabapp
@@ -41,6 +53,9 @@ auth:dockerhub:
     - docker logout
 
 auth:ssh:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: auth
   image: alpine:3.20
 
@@ -62,6 +77,9 @@ auth:ssh:
       'echo "SSH authentication successful"'
 
 lint:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: lint
   tags:
     - thrdlabapp
@@ -77,6 +95,9 @@ lint:
     - python -m flake8 .
 
 test:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: test
   tags:
     - thrdlabapp
@@ -105,6 +126,9 @@ test:
     expire_in: 1 week
 
 sast:bandit:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: sast
   tags:
     - thrdlabapp
@@ -128,6 +152,9 @@ sast:bandit:
     expire_in: 1 week
 
 sast:semgrep:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: sast
   tags:
     - thrdlabapp
@@ -149,6 +176,10 @@ sast:semgrep:
   allow_failure: true
 
 security:trufflehog:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "stage_4"'
+
   stage: secret-scan
   tags:
     - thrdlabapp
@@ -157,9 +188,6 @@ security:trufflehog:
   image:
     name: ghcr.io/trufflesecurity/trufflehog:latest
     entrypoint: [""]
-  needs:
-    - test
-
   variables:
     GIT_DEPTH: "0"
 
@@ -175,6 +203,9 @@ security:trufflehog:
     expire_in: 1 week
 
 build:image:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: build
   tags:
     - thrdlabapp
@@ -208,6 +239,9 @@ build:image:
     - docker logout
 
 deploy:production:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: deploy
   image: alpine:3.20
   needs:
@@ -238,10 +272,10 @@ deploy:production:
       docker compose -f compose.prod.yaml ps
       "
 
+security:check-connection:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
-security:check-connection:
   stage: security-check
   tags:
     - thrdlabapp
@@ -257,6 +291,9 @@ security:check-connection:
     - 'echo "DAST target is available over HTTPS"'
 
 security:zap-baseline:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
   stage: security-scan
   tags:
     - thrdlabapp
