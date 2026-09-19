@@ -11,6 +11,7 @@ stages:
   - test
   - sast
   - secret-scan
+  - dependency-audit
   - build
   - deploy
   - security-check
@@ -200,6 +201,32 @@ security:trufflehog:
     when: always
     paths:
       - trufflehog-report.json
+    expire_in: 1 week
+
+security:pip-audit:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "stage_4"'
+
+  stage: dependency-audit
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image: python:3.10-slim
+
+  before_script:
+    - python --version
+    - pip install --no-cache-dir pip-audit
+
+  script:
+    - pip-audit -r requirements.txt -f json -o pip-audit-report.json || true
+    - python -c "import json; d=json.load(open('pip-audit-report.json')); print('pip-audit report generated')"
+
+  artifacts:
+    when: always
+    paths:
+      - pip-audit-report.json
     expire_in: 1 week
 
 build:image:
