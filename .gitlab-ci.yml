@@ -12,6 +12,7 @@ stages:
   - sast
   - secret-scan
   - dependency-audit
+  - security-audit
   - build
   - deploy
   - security-check
@@ -228,6 +229,34 @@ security:pip-audit:
     paths:
       - pip-audit-report.json
     expire_in: 1 week
+
+security:trivy-fs:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "stage_4"'
+
+  stage: security-audit
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image:
+    name: aquasec/trivy:0.66.0
+    entrypoint: [""]
+
+  script:
+    - trivy --version
+    - trivy fs --scanners vuln,misconfig,secret --format json --output trivy-fs-report.json .
+    - trivy config --format json --output trivy-config-report.json .
+
+  artifacts:
+    when: always
+    paths:
+      - trivy-fs-report.json
+      - trivy-config-report.json
+    expire_in: 1 week
+
+  allow_failure: true
 
 build:image:
   rules:
