@@ -335,6 +335,214 @@ security:trivy-image:
 
   allow_failure: true
 
+
+security:mr-feedback:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+  stage: security-gateway
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image: python:3.10-slim
+  needs:
+    - job: sast:bandit
+      artifacts: true
+    - job: sast:semgrep
+      artifacts: true
+    - job: security:trufflehog
+      artifacts: true
+    - job: security:pip-audit
+      artifacts: true
+    - job: security:trivy-fs
+      artifacts: true
+
+  script:
+    - test -n "$GITLAB_API_TOKEN"
+    - |
+      python - <<'PY'
+      import json, os, pathlib, urllib.parse, urllib.request
+
+      def load(path, default):
+          p = pathlib.Path(path)
+          if not p.exists() or p.stat().st_size == 0:
+              return default
+          try:
+              return json.loads(p.read_text(encoding="utf-8"))
+          except Exception:
+              return default
+
+      verified = 0
+      p = pathlib.Path("trufflehog-report.json")
+      if p.exists():
+          for line in p.read_text(encoding="utf-8").splitlines():
+              try:
+                  if line.strip() and json.loads(line).get("Verified") is True:
+                      verified += 1
+              except Exception:
+                  pass
+
+      bandit = load("bandit-report.json", {})
+      bandit_high = sum(1 for r in bandit.get("results", [])
+                        if str(r.get("issue_severity", "")).upper() == "HIGH")
+
+      audit = load("pip-audit-report.json", {})
+      audit_vulns = sum(len(dep.get("vulns", []))
+                        for dep in audit.get("dependencies", [])) if isinstance(audit, dict) else 0
+
+      trivy = load("trivy-fs-report.json", {})
+      counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+      for result in trivy.get("Results", []) if isinstance(trivy, dict) else []:
+          for key in ("Vulnerabilities", "Misconfigurations", "Secrets"):
+              for item in result.get(key) or []:
+                  sev = str(item.get("Severity", "")).upper()
+                  if sev in counts:
+                      counts[sev] += 1
+
+      rec = []
+      if verified:
+          rec.append("- Remove/revoke detected secrets and rotate affected credentials.")
+      if bandit_high:
+          rec.append("- Review HIGH Bandit findings and remediate unsafe Python patterns.")
+      if audit_vulns:
+          rec.append("- Upgrade affected Python dependencies to fixed versions reported by pip-audit.")
+      if counts["CRITICAL"] or counts["HIGH"]:
+          rec.append("- Fix CRITICAL/HIGH Trivy findings before release.")
+      if not rec:
+          rec.append("- No blocking source-level findings detected; continue with review and the trusted main pipeline.")
+
+      body = f"""## Security checks
+
+      | Check | Result |
+      |---|---:|
+      | TruffleHog verified secrets | {verified} |
+      | Bandit HIGH | {bandit_high} |
+      | pip-audit vulnerabilities | {audit_vulns} |
+      | Trivy CRITICAL | {counts['CRITICAL']} |
+      | Trivy HIGH | {counts['HIGH']} |
+      | Trivy MEDIUM | {counts['MEDIUM']} |
+      | Trivy LOW | {counts['LOW']} |
+
+      ### Recommendations
+      {chr(10).join(rec)}
+
+      The production image scan and final Security Gateway run on the trusted `main` pipeline before deployment.
+      """
+
+      url = f"{os.environ['CI_API_V4_URL']}/projects/{os.environ['CI_PROJECT_ID']}/merge_requests/{os.environ['CI_MERGE_REQUEST_IID']}/notes"
+      data = urllib.parse.urlencode({"body": body}).encode()
+      req = urllib.request.Request(url, data=data,
+          headers={"PRIVATE-TOKEN": os.environ["GITLAB_API_TOKEN"]}, method="POST")
+      with urllib.request.urlopen(req) as response:
+          print(f"MR security comment published: HTTP {response.status}")
+      PY
+
+security:gateway:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+  stage: security-gateway
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image: python:3.10-slim
+  needs:
+    - job: sast:bandit
+      artifacts: true
+    - job: sast:semgrep
+      artifacts: true
+    - job: security:trufflehog
+      artifacts: true
+    - job: security:pip-audit
+      artifacts: true
+    - job: security:trivy-fs
+      artifacts: true
+    - job: security:trivy-image
+      artifacts: true
+
+  script:
+    - |
+      python - <<'PY'
+      import json, pathlib, sys
+
+      blockers = []
+      summary = []
+
+      def load(path, default):
+          p = pathlib.Path(path)
+          if not p.exists() or p.stat().st_size == 0:
+              blockers.append(f"{path}: report is missing or empty")
+              return default
+          try:
+              return json.loads(p.read_text(encoding="utf-8"))
+          except Exception as exc:
+              blockers.append(f"{path}: report cannot be parsed ({exc})")
+              return default
+
+      verified = 0
+      p = pathlib.Path("trufflehog-report.json")
+      if not p.exists():
+          blockers.append("trufflehog-report.json: report is missing")
+      else:
+          for line in p.read_text(encoding="utf-8").splitlines():
+              if not line.strip():
+                  continue
+              try:
+                  if json.loads(line).get("Verified") is True:
+                      verified += 1
+              except Exception:
+                  blockers.append("trufflehog-report.json contains invalid JSON")
+                  break
+      summary.append(f"TruffleHog verified secrets: {verified}")
+      if verified:
+          blockers.append(f"TruffleHog: {verified} verified secret(s)")
+
+      bandit = load("bandit-report.json", {})
+      bandit_high = sum(1 for r in bandit.get("results", [])
+                        if str(r.get("issue_severity", "")).upper() == "HIGH")
+      summary.append(f"Bandit HIGH findings: {bandit_high}")
+      if bandit_high:
+          blockers.append(f"Bandit: {bandit_high} HIGH finding(s)")
+
+      audit = load("pip-audit-report.json", {})
+      audit_vulns = sum(len(dep.get("vulns", []))
+                        for dep in audit.get("dependencies", [])) if isinstance(audit, dict) else 0
+      summary.append(f"pip-audit vulnerabilities: {audit_vulns} (report-only)")
+
+      def trivy(path):
+          report = load(path, {})
+          counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "UNKNOWN": 0}
+          for result in report.get("Results", []) if isinstance(report, dict) else []:
+              for key in ("Vulnerabilities", "Misconfigurations", "Secrets"):
+                  for item in result.get(key) or []:
+                      sev = str(item.get("Severity", "UNKNOWN")).upper()
+                      counts[sev if sev in counts else "UNKNOWN"] += 1
+          return counts
+
+      fs = trivy("trivy-fs-report.json")
+      image = trivy("trivy-image-report.json")
+      summary.append("Trivy filesystem: " + ", ".join(f"{k}={v}" for k, v in fs.items()))
+      summary.append("Trivy image: " + ", ".join(f"{k}={v}" for k, v in image.items()))
+
+      for name, counts in (("Trivy filesystem", fs), ("Trivy image", image)):
+          if counts["CRITICAL"] or counts["HIGH"]:
+              blockers.append(f"{name}: CRITICAL={counts['CRITICAL']}, HIGH={counts['HIGH']}")
+
+      print("=== SECURITY GATEWAY SUMMARY ===")
+      for line in summary:
+          print(line)
+
+      if blockers:
+          print("\nRELEASE BLOCKED")
+          for item in blockers:
+              print(f"- {item}")
+          sys.exit(1)
+
+      print("\nSECURITY GATEWAY PASSED")
+      PY
+
 deploy:production:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
