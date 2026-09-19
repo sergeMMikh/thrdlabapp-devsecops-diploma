@@ -4,6 +4,7 @@ stages:
   - lint
   - test
   - sast
+  - secret-scan
   - build
   - deploy
   - security-check
@@ -146,6 +147,32 @@ sast:semgrep:
     expire_in: 1 week
 
   allow_failure: true
+
+security:trufflehog:
+  stage: secret-scan
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image:
+    name: ghcr.io/trufflesecurity/trufflehog:latest
+    entrypoint: [""]
+  needs:
+    - test
+
+  variables:
+    GIT_DEPTH: "0"
+
+  script:
+    - trufflehog --version
+    - trufflehog git "file://$CI_PROJECT_DIR" --json --no-update > trufflehog-report.json
+    - echo "TruffleHog secret scan completed"
+
+  artifacts:
+    when: always
+    paths:
+      - trufflehog-report.json
+    expire_in: 1 week
 
 build:image:
   stage: build
