@@ -1,7 +1,10 @@
 workflow:
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "stage_4"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
     - when: never
 
 stages:
@@ -15,6 +18,7 @@ stages:
   - security-audit
   - build
   - image-scan
+  - security-gateway
   - deploy
   - security-check
   - security-scan
@@ -81,7 +85,8 @@ auth:ssh:
 
 lint:
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
 
   stage: lint
   tags:
@@ -99,7 +104,8 @@ lint:
 
 test:
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
 
   stage: test
   tags:
@@ -130,6 +136,7 @@ test:
 
 sast:bandit:
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
 
   stage: sast
@@ -156,6 +163,7 @@ sast:bandit:
 
 sast:semgrep:
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
 
   stage: sast
@@ -180,8 +188,8 @@ sast:semgrep:
 
 security:trufflehog:
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "stage_4"'
 
   stage: secret-scan
   tags:
@@ -207,8 +215,8 @@ security:trufflehog:
 
 security:pip-audit:
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "stage_4"'
 
   stage: dependency-audit
   tags:
@@ -233,8 +241,8 @@ security:pip-audit:
 
 security:trivy-fs:
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "stage_4"'
 
   stage: security-audit
   tags:
@@ -262,7 +270,6 @@ security:trivy-fs:
 build:image:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "stage_4"'
 
   stage: build
   tags:
@@ -300,7 +307,6 @@ build:image:
 security:trivy-image:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "stage_4"'
 
   stage: image-scan
   tags:
@@ -336,9 +342,7 @@ deploy:production:
   stage: deploy
   image: alpine:3.20
   needs:
-    - build:image
-    - sast:bandit
-    - sast:semgrep
+    - security:gateway
 
   before_script:
     - apk add --no-cache openssh-client
