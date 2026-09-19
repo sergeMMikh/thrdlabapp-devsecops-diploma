@@ -14,6 +14,7 @@ stages:
   - dependency-audit
   - security-audit
   - build
+  - image-scan
   - deploy
   - security-check
   - security-scan
@@ -261,6 +262,7 @@ security:trivy-fs:
 build:image:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "stage_4"'
 
   stage: build
   tags:
@@ -269,7 +271,8 @@ build:image:
     - build
   image: docker:27-cli
   needs:
-    - test
+    - job: test
+      optional: true
 
   services:
     - name: docker:27-dind
@@ -293,6 +296,38 @@ build:image:
 
   after_script:
     - docker logout
+
+security:trivy-image:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "stage_4"'
+
+  stage: image-scan
+  tags:
+    - thrdlabapp
+    - security
+    - sast
+  image:
+    name: aquasec/trivy:0.66.0
+    entrypoint: [""]
+  needs:
+    - build:image
+
+  variables:
+    TRIVY_NO_PROGRESS: "true"
+
+  script:
+    - IMAGE="$DOCKERHUB_USERNAME/thrdlabapp-devsecops-diploma:$CI_COMMIT_SHORT_SHA"
+    - echo "Scanning Docker image $IMAGE"
+    - trivy image --format json --output trivy-image-report.json "$IMAGE"
+
+  artifacts:
+    when: always
+    paths:
+      - trivy-image-report.json
+    expire_in: 1 week
+
+  allow_failure: true
 
 deploy:production:
   rules:
