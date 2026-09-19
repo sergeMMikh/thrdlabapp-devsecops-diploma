@@ -373,7 +373,7 @@ PASS: 55
 
 План реализации:
 
-- secret scanning — Gitleaks;
+- secret scanning — TruffleHog;
 - dependency scanning — pip-audit и/или Trivy;
 - container image scanning — Trivy;
 - Dockerfile / configuration checks;
@@ -393,6 +393,25 @@ source code
     +-- container image
     +-- CI/CD configuration
 ```
+
+#### Оптимизация pipeline для разработки по этапам
+
+По мере расширения CI/CD полный pipeline стал включать lint, функциональные тесты, SAST, сборку и публикацию Docker-образа, deployment, DAST и дополнительные security-проверки. Полный прогон начал занимать значительное время — в отдельных запусках до 10 минут. Для ускорения разработки было принято решение выполнять работу над крупными этапами диплома в отдельных защищённых ветках с укороченным pipeline.
+
+Для Этапа 4 используется ветка `stage_4`. При push в неё запускаются только проверки, относящиеся к Security Checks, а ранее реализованные lint/test/SAST/build/deploy/DAST jobs пропускаются. После завершения этапа изменения переносятся в `main`, где выполняется полный интеграционный pipeline со всеми стадиями.
+
+Такой подход уменьшает время обратной связи при разработке отдельных security jobs, снижает лишнюю нагрузку на runner-ы и при этом сохраняет обязательную полную проверку интегрированного решения в основной ветке.
+
+#### Реализация Security Checks
+
+На текущем этапе добавлены:
+
+- **TruffleHog** — поиск секретов по Git-истории репозитория; результат сохраняется в `trufflehog-report.json`;
+- **pip-audit** — проверка Python-зависимостей из `requirements.txt` на известные уязвимости; результат сохраняется в `pip-audit-report.json`;
+- **Trivy filesystem scan** — анализ файловой системы репозитория на уязвимые зависимости, секреты и misconfiguration; результат сохраняется в `trivy-fs-report.json`;
+- **Trivy config scan** — отдельная проверка Dockerfile и инфраструктурной конфигурации; результат сохраняется в `trivy-config-report.json`.
+
+На данном этапе проверки работают в report-only режиме. Политика блокировки релиза будет реализована на Этапе 5 (Security Gateway).
 
 ### Этап 5. Security Gateway
 
@@ -455,7 +474,7 @@ commit --> lint --> tests
 | Database | PostgreSQL |
 | SAST | Semgrep, Bandit |
 | Dependency scanning | pip-audit, Trivy |
-| Secret scanning | Gitleaks |
+| Secret scanning | TruffleHog |
 | Container scanning | Trivy |
 | DAST | OWASP ZAP |
 | Security reports | GitLab CI artifacts / reports |
@@ -491,7 +510,7 @@ commit --> lint --> tests
 | 1. CI/CD | Выполнен: lint, pytest, build и deployment |
 | 2. SAST | Выполнен: Bandit и Semgrep интегрированы, отчёты сохраняются в CI |
 | 3. DAST | Выполнен: HTTPS endpoint, pre-check и OWASP ZAP Baseline Scan интегрированы |
-| 4. Security Checks | Не начат |
+| 4. Security Checks | В работе: TruffleHog, pip-audit, Trivy filesystem/config scanning |
 | 5. Security Gateway | Не начат |
 | 6. Итоговая документация | Не начат |
 
