@@ -471,6 +471,8 @@ Production deployment разрешён только из ветки `main`. Secu
 
 Для Merge Request выполняется расширенный набор source-level security checks и автоматически публикуется Security Summary с рекомендациями через GitLab API. Сборка и публикация production Docker image остаются только в доверенном pipeline ветки `main`, чтобы registry credentials не передавались коду из произвольной рабочей ветки.
 
+![Error_on_stage5](image-4.png)
+
 ### Этап 6. Анализ результатов и итоговая документация
 
 После реализации pipeline необходимо:
