@@ -140,7 +140,7 @@ DATABASES = {
 # executing ``pytest`` (which doesn't put ``test`` in argv), or in a CI
 # environment.  Without this the database connection may try to reach a
 # remote Postgres host that isn't accessible (see GitHub workflow failures).
-if (any(x in sys.argv for x in ('test', 'pytest'))
+if ('test' in sys.argv or 'pytest' in sys.modules
         or os.environ.get('CI')):
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',

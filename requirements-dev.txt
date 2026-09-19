@@ -1,0 +1,5 @@
+-r requirements-test.txt
+-r requirements-lint.txt
+
+# Standalone API example in client.py.
+requests==2.34.2

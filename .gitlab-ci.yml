@@ -121,7 +121,7 @@ test:
     - python --version
     - chromium --version
     - chromedriver --version
-    - pip install --no-cache-dir -r requirements.txt
+    - pip install --no-cache-dir -r requirements-test.txt
 
   script:
     - python -m pytest -q --junitxml=pytest-report.xml

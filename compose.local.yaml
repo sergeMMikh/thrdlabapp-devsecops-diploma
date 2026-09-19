@@ -1,0 +1,6 @@
+# PostgreSQL for Django running in the host's virtual environment.
+# docker compose -f compose.yaml -f compose.local.yaml up -d db
+services:
+  db:
+    ports:
+      - "127.0.0.1:55432:5432"
