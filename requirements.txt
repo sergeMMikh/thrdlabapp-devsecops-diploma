@@ -1,5 +1,5 @@
 asgiref
-Django==5.2.18
+Django==5.2.17
 gunicorn
 psycopg2-binary
 sqlparse==0.4.2
