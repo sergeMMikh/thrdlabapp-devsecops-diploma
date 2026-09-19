@@ -411,7 +411,7 @@ source code
 - **Trivy filesystem scan** — анализ файловой системы репозитория на уязвимые зависимости, секреты и misconfiguration; результат сохраняется в `trivy-fs-report.json`;
 - **Trivy config scan** — отдельная проверка Dockerfile и инфраструктурной конфигурации; результат сохраняется в `trivy-config-report.json`.
 
-На данном этапе проверки работают в report-only режиме. Политика блокировки релиза будет реализована на Этапе 5 (Security Gateway).
+На Этапе 4 security scanners формируют отчёты и сохраняют их как CI artifacts. Дополнительно Docker-образ текущего commit проверяется Trivy после сборки (`trivy-image-report.json`). Решение о блокировке релиза вынесено в отдельный Security Gateway на Этапе 5.
 
 ### Этап 5. Security Gateway
 
@@ -430,18 +430,46 @@ source code
 - публиковать информацию о проблемах в merge request;
 - документировать исключения и false positives.
 
-Целевой pipeline:
+Целевая схема pipeline:
 
 ```text
-commit --> lint --> tests
-                    |
-                    +--> SAST -----------+
-                    +--> Secret Scan ----+----> Security Gateway ----> Deploy
-                    +--> SCA ------------+             |
-                    |                                  +--> block release
-                    `--> Build --> Image Scan ----------+--> report
-                                                       `--> MR feedback
+push в рабочую ветку
+        |
+        +--> lint
+        `--> pytest
+
+Merge Request --> main
+        |
+        +--> lint / pytest
+        +--> Bandit / Semgrep
+        +--> TruffleHog
+        +--> pip-audit
+        +--> Trivy fs/config
+        `--> Security feedback в MR
+
+merge / push --> main
+        |
+        +--> полный набор проверок
+        +--> build:image
+        +--> Trivy image
+        |
+        v
+Security Gateway
+        |
+   +----+----+
+   |         |
+ BLOCK      PASS
+             |
+             v
+           Deploy
+             |
+             v
+            DAST
 ```
+
+Production deployment разрешён только из ветки `main`. Security Gateway блокирует deployment при обнаружении verified secrets, а также findings уровня HIGH/CRITICAL в блокирующих проверках. Medium/Low и результаты, не имеющие надёжного severity mapping, сохраняются для анализа и не блокируют релиз автоматически.
+
+Для Merge Request выполняется расширенный набор source-level security checks и автоматически публикуется Security Summary с рекомендациями через GitLab API. Сборка и публикация production Docker image остаются только в доверенном pipeline ветки `main`, чтобы registry credentials не передавались коду из произвольной рабочей ветки.
 
 ### Этап 6. Анализ результатов и итоговая документация
 
@@ -510,8 +538,8 @@ commit --> lint --> tests
 | 1. CI/CD | Выполнен: lint, pytest, build и deployment |
 | 2. SAST | Выполнен: Bandit и Semgrep интегрированы, отчёты сохраняются в CI |
 | 3. DAST | Выполнен: HTTPS endpoint, pre-check и OWASP ZAP Baseline Scan интегрированы |
-| 4. Security Checks | В работе: TruffleHog, pip-audit, Trivy filesystem/config scanning |
-| 5. Security Gateway | Не начат |
+| 4. Security Checks | Выполнен: TruffleHog, pip-audit, Trivy filesystem/config и container image scanning |
+| 5. Security Gateway | В работе: release gate и feedback в Merge Request |
 | 6. Итоговая документация | Не начат |
 
 README обновляется по мере прохождения этапов дипломной работы.
