@@ -494,7 +494,7 @@ Production deployment разрешён только из ветки `main`. Secu
 
 ![Lab_app](image-6.png)
 
-### Этап 6. Анализ результатов и итоговая документация
+### Результаты и итоговая документация
 
 После реализации pipeline необходимо:
 
@@ -563,6 +563,5 @@ Production deployment разрешён только из ветки `main`. Secu
 | 3. DAST | Выполнен: HTTPS endpoint, pre-check и OWASP ZAP Baseline Scan интегрированы |
 | 4. Security Checks | Выполнен: TruffleHog, pip-audit, Trivy filesystem/config и container image scanning |
 | 5. Security Gateway | В работе: release gate и feedback в Merge Request |
-| 6. Итоговая документация | Не начат |
 
 README обновляется по мере прохождения этапов дипломной работы.
