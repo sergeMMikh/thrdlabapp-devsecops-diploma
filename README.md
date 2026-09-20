@@ -496,16 +496,29 @@ Production deployment разрешён только из ветки `main`. Secu
 
 ### Результаты и итоговая документация
 
-После реализации pipeline необходимо:
+В результате дипломной работы построен полный DevSecOps pipeline для Django-приложения, объединяющий функциональные проверки, сборку и публикацию Docker image, автоматизированный deployment и несколько уровней анализа безопасности.
 
-- собрать результаты всех проверок;
-- классифицировать обнаруженные проблемы;
-- отделить подтверждённые уязвимости от false positives;
-- оценить риски и приоритет исправления;
-- описать remediation;
-- зафиксировать архитектуру итогового DevSecOps pipeline;
-- собрать evidence работы каждого этапа;
-- подготовить итоговое описание дипломного проекта.
+В CI/CD интегрированы:
+
+- lint и автоматические тесты pytest;
+- SAST с использованием Bandit и Semgrep;
+- поиск секретов с TruffleHog;
+- аудит Python-зависимостей с pip-audit;
+- анализ filesystem, конфигурации и container image с Trivy;
+- DAST работающего HTTPS-приложения с OWASP ZAP;
+- Security Gateway, принимающий решение о допуске релиза к deployment;
+- сохранение результатов проверок и итоговых security reports в GitLab CI artifacts;
+- Security Summary и рекомендации для Merge Request.
+
+Практическая проверка показала, что механизм release gate работает не только как средство формирования отчётов. При обнаружении HIGH/CRITICAL findings Security Gateway остановил pipeline до стадии production deployment. Результаты сканирования при этом были сохранены как artifacts и использованы для анализа причин.
+
+В ходе remediation была обновлена уязвимая версия Django и устранены обнаруженные исправляемые проблемы зависимостей. Повторные проверки показали исчезновение CRITICAL findings, а результаты pip-audit и Trivy filesystem были приведены к допустимому состоянию. Оставшиеся findings container image были проанализированы с учётом наличия исправлений и политики допуска релиза.
+
+После remediation повторный pipeline успешно прошёл все стадии: функциональные проверки, security scans, Security Gateway, deployment и последующий DAST. Тем самым продемонстрирован полный цикл DevSecOps:
+
+**изменение кода → CI → автоматические security checks → Security Gateway → remediation при необходимости → повторная проверка → deployment → DAST.**
+
+Итоговая реализация обеспечивает воспроизводимую сборку и доставку приложения, сохраняет evidence выполненных проверок и предотвращает автоматический выпуск релиза, не соответствующего заданным security-критериям.
 
 ---
 
@@ -531,7 +544,7 @@ Production deployment разрешён только из ветки `main`. Secu
 | Security reports | GitLab CI artifacts / reports |
 | Security Gateway | GitLab CI jobs, rules and release conditions |
 
-Состав инструментов может уточняться по мере выполнения работы. Для каждого выбранного средства в итоговой документации будет указана причина выбора и область покрытия.
+Перечисленные инструменты составляют итоговый набор средств, использованных для реализации DevSecOps pipeline.
 
 ---
 
@@ -562,6 +575,6 @@ Production deployment разрешён только из ветки `main`. Secu
 | 2. SAST | Выполнен: Bandit и Semgrep интегрированы, отчёты сохраняются в CI |
 | 3. DAST | Выполнен: HTTPS endpoint, pre-check и OWASP ZAP Baseline Scan интегрированы |
 | 4. Security Checks | Выполнен: TruffleHog, pip-audit, Trivy filesystem/config и container image scanning |
-| 5. Security Gateway | В работе: release gate и feedback в Merge Request |
+| 5. Security Gateway | Выполнен: release gate, MR feedback, сохранение artifacts и блокировка небезопасного deployment |
 
-README обновляется по мере прохождения этапов дипломной работы.
+Все этапы дипломной работы выполнены; README содержит итоговую архитектуру, результаты проверок и evidence работы DevSecOps pipeline.
