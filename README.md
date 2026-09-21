@@ -42,19 +42,19 @@
 </br>
 Список поднятых Docker контейнеров на целевом хосте
 
-![docker ps](image.png)</br>
+![docker ps](img/image.png)</br>
 
 Web приложение
 
-![web-app](image-1.png)</br>
+![web-app](img/image-1.png)</br>
 
 Панель администратора Django
 
-![admin](image-2.png)</br>
+![admin](img/image-2.png)</br>
 
 Подключение git репозиториев
 
-![git](image-3.png)</br>
+![git](img/image-3.png)</br>
 
 </details>
 
@@ -476,7 +476,7 @@ Production deployment разрешён только из ветки `main`. Secu
 
 При первом интеграционном запуске Security Gateway контейнерный и filesystem-анализ Trivy обнаружил недопустимые findings уровня HIGH/CRITICAL. Job `security:gateway` завершился с ошибкой, а зависимые стадии `deploy:production`, `security:check-connection` и `security:zap-baseline` не были запущены. Это подтверждает, что release gate фактически останавливает доставку небезопасного релиза до production.
 
-![Security Gateway blocked release](image-4.png)
+![Security Gateway blocked release](img/image-4.png)
 
 В отчёте Gateway были зафиксированы, в частности, уязвимости устаревшей зависимости `Django==4.0.4`. В качестве remediation выполнен переход на поддерживаемую LTS-ветку Django 5.2 с сохранением совместимости с используемым в CI Python 3.10.
 
@@ -488,11 +488,11 @@ Production deployment разрешён только из ветки `main`. Secu
 
 Послке утсранения обнаруженных недостатков и решения проблемы зависимостей итоговый резульат- прохождения всех проверок.
 
-![Final pipeline](image-5.png)
+![Final pipeline](img/image-5.png)
 
 Результаатом работы является веб-сайт по адресу https://diploma.smmikh.pt/
 
-![Lab_app](image-6.png)
+![Lab_app](img/image-6.png)
 
 ### Результаты и итоговая документация
 
