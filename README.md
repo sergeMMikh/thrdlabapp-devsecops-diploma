@@ -1,12 +1,12 @@
-# THRDLabApp DevSecOps Diploma
+# Дипломная работа по профессии «Специалист по информационной безопасности»- Михалёв Сергей
 
-Дипломный проект по треку **DevSecOps**.
+Дипломный проект по курсу **DevSecOps**.
 
 Цель работы — построить безопасный CI/CD-пайплайн для веб-приложения с автоматизированными проверками безопасности и механизмом остановки небезопасного релиза.
 
-Задание Нетологии: [sib-Diplom-Track-DevSecOps](https://github.com/netology-code/sib-Diplom-Track-DevSecOps)
+Задание на проект: [sib-Diplom-Track-DevSecOps](https://github.com/netology-code/sib-Diplom-Track-DevSecOps)
 
-Исходный репозиторий приложения: [THRDLabApp](https://github.com/sergeMMikh/thrdlabapp.git).
+Исходный репозиторий приложения, для которого выплолняется работа: [THRDLabApp](https://github.com/sergeMMikh/thrdlabapp.git).
 
 ---
 
@@ -58,7 +58,7 @@ Web приложение
 
 </details>
 
-Ссылки на репозитории проекта:
+Ссылки на ресурсы проекта:
 * [Исходный проект](https://github.com/sergeMMikh/thrdlabapp.git)
 * [GitLab](https://gitlab.com/sergeMMikh/thrdlabapp-devsecops-diploma.git)
 * [DockerHub](https://hub.docker.com/repository/docker/sergemmikh/thrdlabapp-devsecops-diploma/general)
@@ -73,7 +73,7 @@ Web приложение
 
 #### Реализованная архитектура
 
-Для CI/CD используется **GitLab CI/CD**, для хранения собранных контейнерных образов — **Docker Hub**, а целевой средой развёртывания является учебный VPS.
+Для CI/CD используется [**GitLab CI/CD**](https://gitlab.com/sergeMMikh/thrdlabapp-devsecops-diploma.git), для хранения собранных контейнерных образов — [**Docker Hub**](https://hub.docker.com/repository/docker/sergemmikh/thrdlabapp-devsecops-diploma/general), а целевой средой развёртывания является учебный VPS.
 
 Принципиальное решение этапа — **не собирать приложение на целевом сервере**. Docker-образ является готовым версионируемым артефактом: он собирается в CI, публикуется в Docker Hub и после успешного прохождения предыдущих стадий доставляется на VPS.
 
@@ -167,7 +167,7 @@ DAST runner
 
 Build runner использует `privileged = true`, необходимый для Docker-in-Docker. Security runners работают без privileged mode, если конкретная проверка не требует обратного.
 
-При настройке CD было выявлено сетевое ограничение: сеть, в которой работает основной self-hosted WSL runner, блокирует исходящие подключения к SSH-порту целевого VPS. Поэтому SSH authentication и deployment выполняются GitLab-hosted runner-ом, имеющим сетевой доступ к целевому серверу. DAST выполняется с self-hosted DAST runner через стандартный HTTPS-порт 443.
+При настройке CD было выявлено сетевое ограничение: сеть, в которой работает основной self-hosted WSL runner (университетские ограничения, поздно спохватился), блокирует исходящие подключения к SSH-порту целевого VPS. Поэтому SSH authentication и deployment выполняются GitLab-hosted runner-ом, имеющим сетевой доступ к целевому серверу. DAST выполняется с self-hosted DAST runner через стандартный HTTPS-порт 443.
 
 #### Разделение ответственности
 
@@ -490,7 +490,7 @@ Production deployment разрешён только из ветки `main`. Secu
 
 ![Final pipeline](img/image-5.png)
 
-Результаатом работы является веб-сайт по адресу https://diploma.smmikh.pt/
+Подключил поддомен diploma.smmikh.pt. Результаатом работы является веб-сайт по адресу https://diploma.smmikh.pt/
 
 ![Lab_app](img/image-6.png)
 
